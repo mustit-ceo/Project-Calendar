@@ -342,18 +342,18 @@ export default function ArchivePage() {
                       )}
                     </td>
 
-                    {/* 실 작업기간 */}
+                    {/* 실 작업기간 — 부서 위, 작업일수 아래 (가로 배치) */}
                     <td className="py-3.5 px-3">
                       {deptDurs.length === 0 ? (
                         <span className="text-xs text-gray-400">-</span>
                       ) : (
-                        <div className="flex flex-col gap-1.5">
+                        <div className="flex items-stretch justify-center divide-x divide-gray-200">
                           {deptDurs.map(dd => {
                             const s = DEPT_STYLE[dd.dept] ?? DEPT_STYLE.Oth
                             return (
-                              <div key={dd.dept} className="flex items-center gap-2">
+                              <div key={dd.dept} className="flex flex-col items-center gap-1 px-2.5">
                                 <span
-                                  className="text-[11px] font-semibold px-1.5 py-0.5 rounded flex-shrink-0"
+                                  className="text-[11px] font-semibold px-1.5 py-0.5 rounded"
                                   style={{ background: s.bg, border: `1px solid ${s.border}`, color: s.text }}
                                 >
                                   {dd.dept}
