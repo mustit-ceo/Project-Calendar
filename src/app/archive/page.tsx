@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Project, TaskProgress, RetroEntry } from '@/lib/types'
 import { PROJECT_CATEGORIES } from '@/lib/utils'
@@ -182,6 +183,7 @@ function RetroModal({
 /* ─────────────────────────────────────────────── */
 export default function ArchivePage() {
   const supabase = createClient()
+  const router = useRouter()
   const [allProjects, setAllProjects] = useState<Project[]>([])
   const [progress,    setProgress]    = useState<TaskProgress[]>([])
   const [loading,     setLoading]     = useState(true)
@@ -288,7 +290,12 @@ export default function ArchivePage() {
                 const deptDurs  = calcDeptDurations(ids, allProjects, progress)
 
                 return (
-                  <tr key={p.id} className="border-b border-gray-100 last:border-b-0 hover:bg-gray-50/50 transition-colors">
+                  <tr
+                    key={p.id}
+                    className="border-b border-gray-100 last:border-b-0 hover:bg-blue-50/40 transition-colors cursor-pointer"
+                    onClick={() => router.push(`/calendar?task=${p.id}`)}
+                    title="캘린더에서 보기"
+                  >
                     {/* 프로젝트명 */}
                     <td className="py-3.5 px-4">
                       <span className="font-semibold text-sm text-gray-900">{p.name}</span>
@@ -362,7 +369,8 @@ export default function ArchivePage() {
                     {/* 회고 */}
                     <td
                       className="py-3.5 px-3 cursor-pointer group/retro"
-                      onClick={() => setRetroProject(p)}
+                      onClick={(e) => { e.stopPropagation(); setRetroProject(p) }}
+                      title="회고 작성"
                     >
                       {p.retrospective?.filter(e => e.comment).length ? (
                         <div className="flex flex-col gap-1.5">

@@ -81,6 +81,14 @@ export default function CalendarPage() {
 
   useEffect(() => { fetchAll() }, [fetchAll])
 
+  /* ─ task 파라미터로 진입 시 완료 필터 자동 해제 ─────────── */
+  /* (멤버별 작업현황·완료 아카이브 등에서 좌표 이동 시 완료 항목도 보이도록) */
+  useEffect(() => {
+    if (!highlightId) return
+    setHideCompleted(false)
+    setDrHideCompleted(false)
+  }, [highlightId])
+
   /* ─ 프로젝트 핸들러 ──────────────────────────────────────── */
   const handleUpdateProject = useCallback((id: string, updates: Partial<Project>) => {
     setProjects(prev => {
