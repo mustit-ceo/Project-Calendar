@@ -605,6 +605,52 @@ export default function MembersPage() {
     members.filter(m => m.is_active && (filterDept === 'all' || m.department === filterDept)),
     [members, filterDept]
   )
+
+  /* ─ 디버그: 매칭 실패 원인 추적 (개발용) ─── */
+  useEffect(() => {
+    if (loading || !periods.length || !projects.length) return
+    const periodStart = format(periods[0].start, 'yyyy-MM-dd')
+    const periodEnd   = format(periods[periods.length - 1].end, 'yyyy-MM-dd')
+    const inRange = progress.filter(pr => pr.progress_date >= periodStart && pr.progress_date <= periodEnd)
+    const projectIdsInRange = new Set(inRange.map(pr => pr.project_id))
+
+    const projectMap = new Map(projects.map(p => [p.id, p]))
+    const activeMemberIds   = new Set(activeMembers.map(m => m.id))
+    const activeMemberNames = new Set(activeMembers.map(m => m.name))
+
+    const samples: Array<{ name: string; assignees: unknown; ancestorChain: string }> = []
+    for (const pid of Array.from(projectIdsInRange).slice(0, 10)) {
+      const p = projectMap.get(pid)
+      if (!p) continue
+      const chain: string[] = []
+      let cur: Project | undefined = p
+      let d = 0
+      while (cur && d < 10) {
+        const ids = normalizeAssignees(cur.assignees)
+        const matchActive =
+          ids.some(x => activeMemberIds.has(x) || activeMemberNames.has(x))
+        chain.push(`${cur.name}[assignees=${JSON.stringify(ids)} matchActive=${matchActive}]`)
+        cur = cur.parent_id ? projectMap.get(cur.parent_id) : undefined
+        d++
+      }
+      samples.push({
+        name: p.name,
+        assignees: p.assignees,
+        ancestorChain: chain.join(' → '),
+      })
+    }
+    console.group('[Members 디버그] 매칭 추적')
+    console.log('기간:', periodStart, '~', periodEnd)
+    console.log('이 기간 진행기록 건수:', inRange.length)
+    console.log('이 기간 진행기록의 고유 project 수:', projectIdsInRange.size)
+    console.log('활성 멤버 수:', activeMembers.length)
+    console.log('활성 멤버 ID 샘플:', Array.from(activeMemberIds).slice(0, 3))
+    console.log('활성 멤버 이름 샘플:', Array.from(activeMemberNames).slice(0, 3))
+    console.log('진행기록이 있는 프로젝트 샘플(최대 10개):')
+    samples.forEach(s => console.log(' •', s.name, '→', s.ancestorChain))
+    console.groupEnd()
+  }, [loading, periods, projects, progress, activeMembers])
+
   const activeDepts = useMemo(() => {
     const depts = [...new Set(members.filter(m => m.is_active).map(m => m.department))]
     return depts.sort()
