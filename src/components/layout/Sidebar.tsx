@@ -2,12 +2,14 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { Calendar, Users, CheckSquare, Rocket, Lightbulb, LogOut, ChevronLeft, ChevronRight, ShieldCheck, BarChart2, ClipboardList, MessageSquarePlus } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { Calendar, Users, CheckSquare, Rocket, Lightbulb, LogOut, ChevronLeft, ChevronRight, ShieldCheck, BarChart2, ClipboardList, MessageSquarePlus, LayoutDashboard } from 'lucide-react'
+import { cn, getDelayedProjects } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { useEffect, useState } from 'react'
+import { Project } from '@/lib/types'
 
 const navItems = [
+  { href: '/dashboard', label: '대시보드',         icon: LayoutDashboard },
   { href: '/calendar',  label: '캘린더',          icon: Calendar       },
   { href: '/timeline',  label: '타임라인',         icon: BarChart2      },
   { href: '/members',   label: '멤버별 작업 현황', icon: Users          },
@@ -27,6 +29,7 @@ export function Sidebar() {
   const [userName,   setUserName]   = useState<string | null>(null)
   const [userAvatar, setUserAvatar] = useState<string | null>(null)
   const [isAdmin,    setIsAdmin]    = useState(false)
+  const [delayedCount, setDelayedCount] = useState(0)
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
@@ -45,6 +48,24 @@ export function Sidebar() {
         await supabase.rpc('update_last_seen', { user_email: user.email })
       }
     })
+  }, [])
+
+  // 지연 항목 카운트 (사이드바 배지)
+  useEffect(() => {
+    let cancelled = false
+    const fetchDelayCount = async () => {
+      const { data } = await supabase
+        .from('projects')
+        .select('id, parent_id, status, start_date, end_date, lts_date, is_archived, updated_at')
+        .eq('is_archived', false)
+      if (cancelled) return
+      const count = getDelayedProjects((data ?? []) as Project[]).length
+      setDelayedCount(count)
+    }
+    fetchDelayCount()
+    // 5분마다 재조회
+    const t = setInterval(fetchDelayCount, 5 * 60 * 1000)
+    return () => { cancelled = true; clearInterval(t) }
   }, [])
 
   const handleLogout = async () => {
@@ -81,13 +102,14 @@ export function Sidebar() {
       <nav className={cn('flex-1 py-4 space-y-1 overflow-y-auto', collapsed ? 'px-1' : 'px-3')}>
         {navItems.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + '/')
+          const showBadge = href === '/dashboard' && delayedCount > 0
           return (
             <Link
               key={href}
               href={href}
-              title={collapsed ? label : undefined}
+              title={collapsed ? `${label}${showBadge ? ` · 주의 ${delayedCount}` : ''}` : undefined}
               className={cn(
-                'flex items-center rounded-lg text-sm font-medium transition-colors',
+                'flex items-center rounded-lg text-sm font-medium transition-colors relative',
                 collapsed ? 'justify-center px-0 py-2.5' : 'gap-3 px-3 py-2.5',
                 active
                   ? 'bg-blue-600 text-white'
@@ -95,7 +117,19 @@ export function Sidebar() {
               )}
             >
               <Icon size={18} className="flex-shrink-0" />
-              {!collapsed && label}
+              {!collapsed && (
+                <>
+                  <span className="flex-1">{label}</span>
+                  {showBadge && (
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-500 text-white">
+                      {delayedCount}
+                    </span>
+                  )}
+                </>
+              )}
+              {collapsed && showBadge && (
+                <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-red-500" />
+              )}
             </Link>
           )
         })}
