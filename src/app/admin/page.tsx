@@ -45,7 +45,7 @@ function AddUserModal({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!email.trim()) { setError('이메일을 입력해주세요.'); return }
-    if (!email.includes('@mustit.co.kr')) { setError('mustit.co.kr 이메일만 등록할 수 있습니다.'); return }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { setError('올바른 이메일 형식이 아닙니다.'); return }
     setSaving(true)
     setError(null)
     try {
@@ -75,7 +75,7 @@ function AddUserModal({
                 autoFocus
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                placeholder="example@mustit.co.kr"
+                placeholder="user@example.com"
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
               />
             </div>

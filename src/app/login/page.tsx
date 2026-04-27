@@ -12,8 +12,11 @@ function LoginForm() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (searchParams.get('error') === 'unauthorized') {
-      setError('mustit.co.kr 이메일 계정만 접속할 수 있습니다.')
+    const code = searchParams.get('error')
+    if (code === 'pending') {
+      setError('승인 대기 중인 계정입니다. 관리자에게 활성화를 요청해주세요.')
+    } else if (code === 'callback') {
+      setError('로그인 처리 중 오류가 발생했습니다. 다시 시도해주세요.')
     }
   }, [searchParams])
 
@@ -24,9 +27,6 @@ function LoginForm() {
       provider: 'google',
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
-        queryParams: {
-          hd: 'mustit.co.kr', // Google의 hosted domain 힌트
-        },
       },
     })
     if (error) {
@@ -42,7 +42,7 @@ function LoginForm() {
         <div className="flex flex-col items-center gap-2">
           <div className="text-4xl">📅</div>
           <h1 className="text-xl font-bold text-gray-900">Project Calendar</h1>
-          <p className="text-sm text-gray-400">mustit 팀 전용</p>
+          <p className="text-sm text-gray-400">Google 계정으로 로그인하세요</p>
         </div>
 
         {/* 에러 메시지 */}
@@ -75,7 +75,7 @@ function LoginForm() {
         </button>
 
         <p className="text-xs text-gray-400 text-center">
-          @mustit.co.kr 계정으로만 접속 가능합니다
+          처음 로그인 시 관리자 승인이 필요합니다
         </p>
       </div>
     </div>

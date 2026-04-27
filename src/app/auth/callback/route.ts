@@ -42,11 +42,12 @@ export async function GET(request: NextRequest) {
         const name = meta?.full_name ?? meta?.name ?? null
         const now = new Date().toISOString()
 
-        // 신규 사용자면 자동 등록 (이미 있으면 무시 — name 덮어쓰기 방지)
+        // 신규 사용자면 자동 등록 — is_active=false (관리자 승인 대기)
+        // 이미 있으면 무시 (name·is_active 덮어쓰기 방지)
         await supabase
           .from('allowed_users')
           .upsert(
-            { email, name, last_login_at: now },
+            { email, name, is_active: false, last_login_at: now },
             { onConflict: 'email', ignoreDuplicates: true }
           )
 
