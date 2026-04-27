@@ -262,7 +262,7 @@ export default function ArchivePage() {
               <col style={{ width: 150 }} />
               <col style={{ width: 150 }} />
               <col style={{ width: 150 }} />
-              <col style={{ width: 150 }} />
+              <col style={{ width: 300 }} />
               <col />
             </colgroup>
             <thead>
@@ -358,7 +358,7 @@ export default function ArchivePage() {
                                 >
                                   {dd.dept}
                                 </span>
-                                <DaysLabel days={dd.days} />
+                                <span className="text-sm font-semibold text-gray-700">{dd.days}</span>
                               </div>
                             )
                           })}
