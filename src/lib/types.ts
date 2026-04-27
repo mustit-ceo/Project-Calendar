@@ -127,3 +127,15 @@ export interface DrProgress {
   dr_id: string
   progress_date: string
 }
+
+// ── 개선사항 요청 ────────────────────────────────────────────
+export interface ImprovementRequest {
+  id: string
+  user_email: string
+  user_name: string | null
+  content: string
+  link: string | null
+  image_urls: string[]
+  created_at: string
+  updated_at: string
+}

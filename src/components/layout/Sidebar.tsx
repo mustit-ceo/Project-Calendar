@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { Calendar, Users, CheckSquare, Rocket, Lightbulb, LogOut, ChevronLeft, ChevronRight, ShieldCheck, BarChart2, ClipboardList } from 'lucide-react'
+import { Calendar, Users, CheckSquare, Rocket, Lightbulb, LogOut, ChevronLeft, ChevronRight, ShieldCheck, BarChart2, ClipboardList, MessageSquarePlus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { useEffect, useState } from 'react'
@@ -15,6 +15,7 @@ const navItems = [
   { href: '/backlog',   label: 'Backlog',          icon: ClipboardList  },
   { href: '/uxi-lab',   label: 'UXI LAB',          icon: Lightbulb      },
   { href: '/next-up',   label: 'NEXT UP',          icon: Rocket         },
+  { href: '/feedback',  label: '개선사항 요청',     icon: MessageSquarePlus },
 ]
 
 export function Sidebar() {
