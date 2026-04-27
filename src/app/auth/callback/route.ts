@@ -3,9 +3,14 @@ import { cookies } from 'next/headers'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function GET(request: NextRequest) {
-  const { searchParams, origin } = new URL(request.url)
+  const { searchParams, origin: requestOrigin } = new URL(request.url)
   const code = searchParams.get('code')
   const next = searchParams.get('next') ?? '/calendar'
+
+  // 프록시(Railway) 뒤에서 실제 외부 호스트 복원
+  const forwardedHost  = request.headers.get('x-forwarded-host')
+  const forwardedProto = request.headers.get('x-forwarded-proto') ?? 'https'
+  const origin = forwardedHost ? `${forwardedProto}://${forwardedHost}` : requestOrigin
 
   if (code) {
     const cookieStore = await cookies()
