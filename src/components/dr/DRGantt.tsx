@@ -3,14 +3,15 @@
 import { useState, useMemo, useRef, useCallback, useEffect, ReactNode } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { DrItem, DrProgress, Status, Department, TeamMember } from '@/lib/types'
-import { STATUSES, DR_DEPARTMENTS, getJiraUrl } from '@/lib/utils'
+import { DR_DEPARTMENTS, getJiraUrl } from '@/lib/utils'
+import { DeptBadge } from '@/components/ui/DeptBadge'
 import {
   addWeeks, addDays, format, differenceInCalendarWeeks,
   isSameDay, subMonths, addMonths, startOfMonth, getISOWeek,
 } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import {
-  X, ChevronLeft, ChevronRight, Plus, MoreHorizontal, Check,
+  X, ChevronLeft, ChevronRight, MoreHorizontal, Check,
   GripVertical, Trash2, Pencil,
 } from 'lucide-react'
 
@@ -76,36 +77,69 @@ function getProgressSegments(
   return segs
 }
 
-/* ─ 상태 뱃지 ──────────────────────────────────────────────── */
-const STATUS_STYLE: Record<Status, string> = {
-  '완료': 'bg-green-100 text-green-700',
-  '진행': 'bg-blue-100 text-blue-700',
-  '대기': 'bg-gray-100 text-gray-500',
-  '보류': 'bg-red-100 text-red-600',
-  '예정': 'bg-yellow-100 text-yellow-700',
-}
-function StatusBadge({ status }: { status: Status }) {
+/* ─ 상태 텍스트 컬러 (프로젝트 탭과 동일) ────────────────── */
+function StatusText({ status }: { status: string }) {
+  const color =
+    status === '진행' ? '#00B050' :
+    status === '예정' ? '#A6A6A6' : '#000000'
   return (
-    <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded ${STATUS_STYLE[status]}`}>
+    <span style={{ color, fontSize: 13, fontWeight: 400, whiteSpace: 'nowrap' }}>
       {status}
     </span>
   )
 }
 
-/* ─ 부서 뱃지 ──────────────────────────────────────────────── */
-const DEPT_COLORS: Record<string, string> = {
-  PM: 'bg-purple-100 text-purple-700',
-  BE: 'bg-orange-100 text-orange-700',
-  FE: 'bg-cyan-100 text-cyan-700',
-  Design: 'bg-rose-100 text-rose-700',
-  UXD: 'bg-rose-100 text-rose-700',
-  Oth: 'bg-gray-100 text-gray-600',
-}
-function DeptBadge({ dept }: { dept: string }) {
+/* ─ 상태 선택 팝업 (프로젝트 탭과 동일) ──────────────────── */
+function StatusPickerPopup({
+  anchor, current, onSelect, onClose,
+}: {
+  anchor: DOMRect
+  current: string
+  onSelect: (status: string) => void
+  onClose: () => void
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose()
+    }
+    const t = setTimeout(() => document.addEventListener('mousedown', handler), 50)
+    return () => { clearTimeout(t); document.removeEventListener('mousedown', handler) }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const estimatedH = 5 * 34 + 8
+  const spaceBelow = window.innerHeight - anchor.bottom
+  const top  = spaceBelow >= estimatedH + 8 ? anchor.bottom + 4 : anchor.top - estimatedH - 4
+  const left = Math.min(anchor.left, window.innerWidth - 120)
+
+  const STATUS_COLORS_POPUP: Record<string, string> = {
+    '진행': '#00B050', '예정': '#A6A6A6',
+    '완료': '#000000', '대기': '#000000', '보류': '#000000',
+  }
+
   return (
-    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${DEPT_COLORS[dept] ?? 'bg-gray-100 text-gray-600'}`}>
-      {dept}
-    </span>
+    <div
+      ref={ref}
+      style={{
+        position: 'fixed', top, left, zIndex: 9998,
+        width: 110, background: '#fff',
+        border: '1px solid #e5e7eb', borderRadius: 8,
+        boxShadow: '0 4px 16px rgba(0,0,0,0.14)', overflow: 'hidden',
+      }}
+    >
+      {['진행', '대기', '완료', '보류', '예정'].map(s => (
+        <button
+          key={s}
+          type="button"
+          onClick={() => onSelect(s)}
+          className={`w-full text-left px-3 py-2 text-[13px] hover:bg-gray-50 transition-colors cursor-pointer flex items-center gap-1.5 ${s === current ? 'bg-blue-50' : ''}`}
+        >
+          {s === current && <span className="w-1.5 h-1.5 rounded-full bg-blue-400 flex-shrink-0" />}
+          <span style={{ color: STATUS_COLORS_POPUP[s] ?? '#000' }}>{s}</span>
+        </button>
+      ))}
+    </div>
   )
 }
 
@@ -465,27 +499,47 @@ export function DRGantt({
   const [actionMenu, setActionMenu] = useState<{ rect: DOMRect; item: DrItem } | null>(null)
   const [teamAnchor, setTeamAnchor] = useState<DOMRect | null>(null)
   const [editTeamId, setEditTeamId] = useState<string | null>(null)
+  const [statusAnchor, setStatusAnchor] = useState<{ rect: DOMRect; itemId: string; current: string } | null>(null)
+
+  /* ─ JIRA Ctrl+클릭 가이드 툴팁 ──────────────────────────── */
+  const jiraTipRef = useRef<HTMLDivElement>(null)
+  const showJiraTip = useCallback((el: HTMLElement) => {
+    const tip = jiraTipRef.current
+    if (!tip) return
+    const r = el.getBoundingClientRect()
+    tip.style.left    = `${r.right + 6}px`
+    tip.style.top     = `${r.top + r.height / 2}px`
+    tip.style.opacity = '1'
+  }, [])
+  const hideJiraTip = useCallback(() => {
+    if (jiraTipRef.current) jiraTipRef.current.style.opacity = '0'
+  }, [])
 
   /* ─ 인라인 편집 ──────────────────────────────────────────── */
-  const [editCell, setEditCell] = useState<{ id: string; field: 'name' | 'jira' | 'status' } | null>(null)
+  const [editCell, setEditCell] = useState<{ id: string; field: 'name' | 'jira' } | null>(null)
   const [editValue, setEditValue] = useState('')
 
-  function startEdit(item: DrItem, field: 'name' | 'jira' | 'status') {
+  function startEdit(item: DrItem, field: 'name' | 'jira') {
     let v = ''
-    if (field === 'name')   v = item.name
-    if (field === 'jira')   v = item.jira_ticket ?? ''
-    if (field === 'status') v = item.status
+    if (field === 'name') v = item.name
+    if (field === 'jira') v = item.jira_ticket ?? ''
     setEditCell({ id: item.id, field })
     setEditValue(v)
   }
 
-  async function commitEdit(id: string, field: 'name' | 'jira' | 'status', value: string) {
+  async function commitEdit(id: string, field: 'name' | 'jira', value: string) {
     setEditCell(null)
     if (field === 'name' && !value.trim()) return
     const update: Partial<DrItem> =
-      field === 'name'   ? { name: value.trim() } :
-      field === 'jira'   ? { jira_ticket: value.trim() || null } :
-      { status: value as Status }
+      field === 'name' ? { name: value.trim() } :
+      { jira_ticket: value.trim() || null }
+    onUpdateItem(id, update)
+    await supabase.from('dr_items').update(update).eq('id', id)
+  }
+
+  async function commitStatus(id: string, status: string) {
+    setStatusAnchor(null)
+    const update: Partial<DrItem> = { status: status as Status }
     onUpdateItem(id, update)
     await supabase.from('dr_items').update(update).eq('id', id)
   }
@@ -577,6 +631,29 @@ export function DRGantt({
         className="fixed h-0.5 bg-blue-500 pointer-events-none z-[9999] opacity-0 transition-opacity"
         style={{ transform: 'translateY(-50%)' }}
       />
+
+      {/* JIRA Ctrl+클릭 가이드 툴팁 */}
+      <div
+        ref={jiraTipRef}
+        style={{
+          position: 'fixed', transform: 'translateY(-50%)',
+          zIndex: 9999, opacity: 0, pointerEvents: 'none',
+          transition: 'opacity 0.12s',
+        }}
+        className="text-[11px] text-gray-600 bg-white border border-gray-200 rounded-md px-2 py-1 shadow-md whitespace-nowrap"
+      >
+        Ctrl+클릭으로 열기
+      </div>
+
+      {/* 상태 선택 팝업 */}
+      {statusAnchor && (
+        <StatusPickerPopup
+          anchor={statusAnchor.rect}
+          current={statusAnchor.current}
+          onSelect={s => commitStatus(statusAnchor.itemId, s)}
+          onClose={() => setStatusAnchor(null)}
+        />
+      )}
 
       {/* ── STICKY ZONE ── */}
       <div className="sticky top-0 z-50 bg-gray-50">
@@ -685,7 +762,7 @@ export function DRGantt({
                   ))}
                 </div>
                 {/* 날짜 행 */}
-                <div className="relative bg-white" style={{ height: 34, boxShadow: '0 3px 0 #9ca3af' }}>
+                <div className="relative bg-white border-b border-gray-200" style={{ height: 34 }}>
                   {yearDays.map((d, di) => {
                     const isToday      = isSameDay(d, today)
                     const isMonday     = di % 5 === 0
@@ -725,8 +802,8 @@ export function DRGantt({
               const jiraUrl    = getJiraUrl(item.jira_ticket)
               const ganttColor = getDeptGanttColor(item.department)
               const segments   = segmentsMap.get(item.id) ?? []
-              const isEditingName   = editCell?.id === item.id && editCell.field === 'name'
-              const isEditingStatus = editCell?.id === item.id && editCell.field === 'status'
+              const isEditingName = editCell?.id === item.id && editCell.field === 'name'
+              const isEditingJira = editCell?.id === item.id && editCell.field === 'jira'
 
               return (
                 <tr
@@ -782,7 +859,7 @@ export function DRGantt({
                       {isEditingName ? (
                         <input
                           autoFocus
-                          className="flex-1 text-sm border-b border-blue-400 outline-none bg-transparent"
+                          className="flex-1 text-sm border border-blue-400 rounded px-2 py-0.5 focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white"
                           value={editValue}
                           onChange={e => setEditValue(e.target.value)}
                           onBlur={() => commitEdit(item.id, 'name', editValue)}
@@ -792,13 +869,13 @@ export function DRGantt({
                           }}
                         />
                       ) : (
-                        <span
-                          className="flex-1 text-sm text-gray-800 truncate cursor-pointer hover:text-blue-600"
-                          onDoubleClick={() => startEdit(item, 'name')}
-                          title={item.name}
+                        <div
+                          className="flex-1 min-w-0 cursor-pointer hover:bg-blue-50 rounded px-1 transition-colors"
+                          onClick={() => startEdit(item, 'name')}
+                          title="클릭하여 이름 수정"
                         >
-                          {item.name}
-                        </span>
+                          <span className="text-sm text-gray-800 truncate block">{item.name}</span>
+                        </div>
                       )}
                       <button
                         className="flex-shrink-0 opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-gray-100 text-gray-400 cursor-pointer"
@@ -817,18 +894,41 @@ export function DRGantt({
                     className="sticky z-10 border-r border-gray-200 px-2 text-center"
                     style={{ left: stickyLeft.jira, width: widths.jira, background: 'inherit', paddingTop: ROW_PY, paddingBottom: ROW_PY }}
                   >
-                    {jiraUrl ? (
-                      <a
-                        href={jiraUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-[12px] text-blue-500 hover:underline truncate block text-center"
-                        onClick={e => e.stopPropagation()}
-                      >
-                        {item.jira_ticket}
-                      </a>
+                    {isEditingJira ? (
+                      <input
+                        autoFocus
+                        className="w-full border border-blue-400 rounded px-1.5 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
+                        value={editValue}
+                        onChange={e => setEditValue(e.target.value)}
+                        onBlur={() => commitEdit(item.id, 'jira', editValue)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') commitEdit(item.id, 'jira', editValue)
+                          if (e.key === 'Escape') setEditCell(null)
+                        }}
+                        placeholder="PROJ-0000"
+                      />
                     ) : (
-                      <span className="text-sm text-gray-300">-</span>
+                      <div
+                        className="cursor-pointer hover:bg-blue-50 rounded px-1 transition-colors"
+                        onMouseEnter={jiraUrl ? e => showJiraTip(e.currentTarget) : undefined}
+                        onMouseLeave={jiraUrl ? hideJiraTip : undefined}
+                        onClick={e => {
+                          e.stopPropagation()
+                          if ((e.ctrlKey || e.metaKey) && jiraUrl) {
+                            window.open(jiraUrl, '_blank', 'noopener,noreferrer')
+                          } else {
+                            startEdit(item, 'jira')
+                          }
+                        }}
+                      >
+                        {item.jira_ticket && item.jira_ticket !== '-' ? (
+                          <span className="text-[13px] text-blue-500 truncate block text-center">
+                            {item.jira_ticket}
+                          </span>
+                        ) : (
+                          <span className="text-sm text-gray-300">-</span>
+                        )}
+                      </div>
                     )}
                   </td>
 
@@ -837,24 +937,20 @@ export function DRGantt({
                     className="sticky z-10 border-r border-gray-200 px-2 text-center"
                     style={{ left: stickyLeft.status, width: widths.status, background: 'inherit', paddingTop: ROW_PY, paddingBottom: ROW_PY }}
                   >
-                    {isEditingStatus ? (
-                      <select
-                        autoFocus
-                        className="text-xs border border-gray-200 rounded px-1 py-0.5"
-                        value={editValue}
-                        onChange={e => { setEditValue(e.target.value); commitEdit(item.id, 'status', e.target.value) }}
-                        onBlur={() => setEditCell(null)}
-                      >
-                        {STATUSES.map(s => <option key={s}>{s}</option>)}
-                      </select>
-                    ) : (
-                      <div
-                        className="cursor-pointer hover:opacity-80 flex justify-center"
-                        onClick={() => { setEditCell({ id: item.id, field: 'status' }); setEditValue(item.status) }}
-                      >
-                        <StatusBadge status={item.status} />
-                      </div>
-                    )}
+                    <div
+                      className="cursor-pointer hover:bg-blue-50 rounded px-1 transition-colors flex justify-center"
+                      onClick={e => {
+                        e.stopPropagation()
+                        setStatusAnchor({
+                          rect: e.currentTarget.getBoundingClientRect(),
+                          itemId: item.id,
+                          current: item.status,
+                        })
+                      }}
+                      title="클릭하여 상태 변경"
+                    >
+                      <StatusText status={item.status} />
+                    </div>
                   </td>
 
                   {/* ── 부서/담당자 ── */}
@@ -870,7 +966,7 @@ export function DRGantt({
                         setEditTeamId(item.id)
                       }}
                     >
-                      <div className="flex items-center justify-center flex-shrink-0" style={{ width: 56 }}>
+                      <div className="flex items-center justify-center flex-shrink-0" style={{ width: 64 }}>
                         {item.department ? <DeptBadge dept={item.department} /> : <span className="text-gray-300 text-xs">-</span>}
                       </div>
                       <div className="flex items-center min-w-0 flex-1 px-1">
