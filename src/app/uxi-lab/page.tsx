@@ -321,8 +321,7 @@ export default function UxiLabPage() {
       query = query.gte('entry_date', monthStart).lt('entry_date', monthEnd)
     }
     const { data } = await query
-      .order('sort_order', { ascending: true })
-      .order('created_at', { ascending: false })
+      .order('created_at', { ascending: true })
     setItems(data ?? [])
     setLoading(false)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
