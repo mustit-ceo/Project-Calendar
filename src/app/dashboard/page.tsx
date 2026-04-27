@@ -121,6 +121,21 @@ export default function DashboardPage() {
   const [projects, setProjects] = useState<Project[]>([])
   const [members, setMembers] = useState<TeamMember[]>([])
   const [loading, setLoading] = useState(true)
+  // null = 확인 중 / true = 관리자 / false = 권한 없음
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null)
+
+  // 관리자 권한 체크 (URL 직접 접근 차단)
+  useEffect(() => {
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (!user?.email) { setIsAdmin(false); return }
+      const { data } = await supabase
+        .from('allowed_users')
+        .select('role, is_active')
+        .eq('email', user.email)
+        .maybeSingle()
+      setIsAdmin(data?.role === 'admin' && data?.is_active === true)
+    })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const today = useMemo(() => new Date(), [])
   const weeks = useMemo(() => buildWeeks(today, NUM_WEEKS), [today])
@@ -210,6 +225,15 @@ export default function DashboardPage() {
       return gp ? `${gp.name} > ${parent.name}` : parent.name
     }
     return parent.name
+  }
+
+  // 관리자 가드 — hook 호출 다음에 early return (rules of hooks 준수)
+  if (isAdmin === false) {
+    return (
+      <div className="p-6 flex items-center justify-center h-64 text-gray-400 text-sm">
+        관리자 권한이 필요합니다.
+      </div>
+    )
   }
 
   return (

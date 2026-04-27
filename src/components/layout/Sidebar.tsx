@@ -9,7 +9,6 @@ import { useEffect, useState } from 'react'
 import { Project } from '@/lib/types'
 
 const navItems = [
-  { href: '/dashboard', label: '대시보드',         icon: LayoutDashboard },
   { href: '/calendar',  label: '캘린더',          icon: Calendar       },
   { href: '/timeline',  label: '타임라인',         icon: BarChart2      },
   { href: '/members',   label: '멤버별 작업 현황', icon: Users          },
@@ -50,8 +49,9 @@ export function Sidebar() {
     })
   }, [])
 
-  // 지연 항목 카운트 (사이드바 배지)
+  // 지연 항목 카운트 (대시보드 배지) — 관리자만 조회
   useEffect(() => {
+    if (!isAdmin) return
     let cancelled = false
     const fetchDelayCount = async () => {
       const { data } = await supabase
@@ -66,7 +66,7 @@ export function Sidebar() {
     // 5분마다 재조회
     const t = setInterval(fetchDelayCount, 5 * 60 * 1000)
     return () => { cancelled = true; clearInterval(t) }
-  }, [])
+  }, [isAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
@@ -102,14 +102,13 @@ export function Sidebar() {
       <nav className={cn('flex-1 py-4 space-y-1 overflow-y-auto', collapsed ? 'px-1' : 'px-3')}>
         {navItems.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + '/')
-          const showBadge = href === '/dashboard' && delayedCount > 0
           return (
             <Link
               key={href}
               href={href}
-              title={collapsed ? `${label}${showBadge ? ` · 주의 ${delayedCount}` : ''}` : undefined}
+              title={collapsed ? label : undefined}
               className={cn(
-                'flex items-center rounded-lg text-sm font-medium transition-colors relative',
+                'flex items-center rounded-lg text-sm font-medium transition-colors',
                 collapsed ? 'justify-center px-0 py-2.5' : 'gap-3 px-3 py-2.5',
                 active
                   ? 'bg-blue-600 text-white'
@@ -117,19 +116,7 @@ export function Sidebar() {
               )}
             >
               <Icon size={18} className="flex-shrink-0" />
-              {!collapsed && (
-                <>
-                  <span className="flex-1">{label}</span>
-                  {showBadge && (
-                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-500 text-white">
-                      {delayedCount}
-                    </span>
-                  )}
-                </>
-              )}
-              {collapsed && showBadge && (
-                <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-red-500" />
-              )}
+              {!collapsed && label}
             </Link>
           )
         })}
@@ -156,6 +143,33 @@ export function Sidebar() {
             >
               <ShieldCheck size={18} className="flex-shrink-0" />
               {!collapsed && '관리자'}
+            </Link>
+            {/* 대시보드 — 관리자에게만 노출 */}
+            <Link
+              href="/dashboard"
+              title={collapsed ? `대시보드${delayedCount > 0 ? ` · 주의 ${delayedCount}` : ''}` : undefined}
+              className={cn(
+                'flex items-center rounded-lg text-sm font-medium transition-colors relative',
+                collapsed ? 'justify-center px-0 py-2.5' : 'gap-3 px-3 py-2.5',
+                pathname === '/dashboard' || pathname.startsWith('/dashboard/')
+                  ? 'bg-indigo-600 text-white'
+                  : 'text-gray-400 hover:bg-gray-800 hover:text-white'
+              )}
+            >
+              <LayoutDashboard size={18} className="flex-shrink-0" />
+              {!collapsed && (
+                <>
+                  <span className="flex-1">대시보드</span>
+                  {delayedCount > 0 && (
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-500 text-white">
+                      {delayedCount}
+                    </span>
+                  )}
+                </>
+              )}
+              {collapsed && delayedCount > 0 && (
+                <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-red-500" />
+              )}
             </Link>
           </>
         )}
