@@ -321,6 +321,7 @@ export default function UxiLabPage() {
       query = query.gte('entry_date', monthStart).lt('entry_date', monthEnd)
     }
     const { data } = await query
+      .order('entry_date', { ascending: true, nullsFirst: false })
       .order('created_at', { ascending: true })
     setItems(data ?? [])
     setLoading(false)
