@@ -257,7 +257,7 @@ export default function ArchivePage() {
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <table className="w-full table-fixed">
             <colgroup>
-              <col style={{ width: 350 }} />
+              <col style={{ width: 400 }} />
               <col style={{ width: 100 }} />
               <col style={{ width: 150 }} />
               <col style={{ width: 150 }} />

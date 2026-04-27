@@ -360,13 +360,17 @@ export default function BacklogPage() {
     saveField(id, { importance })
   }
 
-  function commitDate(id: string, ymd: string) {
-    if (!ymd) { setEditCell(null); return }
-    // 로컬 자정 기준으로 ISO 변환 (UI 표시도 로컬 기준이라 round-trip 일치)
-    const iso = new Date(ymd + 'T00:00:00').toISOString()
+  function commitDate(id: string, raw: string) {
+    const ymd = raw.trim()
+    setEditCell(null)
+    if (!ymd) return
+    // YYYY-MM-DD 형식만 허용
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return
+    const d = new Date(ymd + 'T00:00:00')
+    if (isNaN(d.getTime())) return
+    const iso = d.toISOString()
     updateLocal(id, { created_at: iso })
     saveField(id, { created_at: iso })
-    setEditCell(null)
   }
 
   /* ── 추가 ──────────────────────────────────────── */
@@ -593,14 +597,12 @@ export default function BacklogPage() {
                       onClick={() => setEditCell({ id: item.id, field: 'date' })}
                     >
                       {editCell?.id === item.id && editCell?.field === 'date' ? (
-                        <input
-                          type="date"
-                          autoFocus
-                          defaultValue={fmtIsoDate(item.created_at)}
-                          onChange={e => commitDate(item.id, e.target.value)}
-                          onBlur={e => commitDate(item.id, e.target.value)}
-                          onKeyDown={e => { if (e.key === 'Escape') setEditCell(null) }}
-                          className="w-full border border-blue-400 rounded px-1.5 py-0.5 text-[13px] focus:outline-none"
+                        <InlineText
+                          initial={fmtIsoDate(item.created_at)}
+                          onCommit={v => commitDate(item.id, v)}
+                          onCancel={() => setEditCell(null)}
+                          className="w-full border border-blue-400 rounded px-1.5 py-0.5 text-[13px] focus:outline-none text-center"
+                          placeholder="YYYY-MM-DD"
                         />
                       ) : (
                         <span className="text-[13px] text-gray-500">{fmtIsoDate(item.created_at) || '-'}</span>
