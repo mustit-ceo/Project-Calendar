@@ -8,11 +8,14 @@ import { X, Check } from 'lucide-react'
 import { ProjectHistory } from './ProjectHistory'
 import { ProjectComments } from './ProjectComments'
 
+type FormTab = 'edit' | 'comments' | 'history'
+
 interface ProjectFormProps {
   project?: Partial<Project>
   parentId?: string
   defaultCategory?: string
   isDR?: boolean
+  initialTab?: FormTab
   onClose: () => void
   onSave: () => void
 }
@@ -20,7 +23,7 @@ interface ProjectFormProps {
 
 
 
-export function ProjectForm({ project, parentId, defaultCategory, isDR = false, onClose, onSave }: ProjectFormProps) {
+export function ProjectForm({ project, parentId, defaultCategory, isDR = false, initialTab = 'edit', onClose, onSave }: ProjectFormProps) {
   const supabase = createClient()
   const isEdit = !!project?.id
 
@@ -61,7 +64,7 @@ export function ProjectForm({ project, parentId, defaultCategory, isDR = false, 
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const [saving, setSaving] = useState(false)
-  const [activeTab, setActiveTab] = useState<'edit' | 'comments' | 'history'>('edit')
+  const [activeTab, setActiveTab] = useState<FormTab>(initialTab)
 
   // ── 저장 ─────────────────────────────────────────────────
   async function handleSubmit(e: React.FormEvent) {

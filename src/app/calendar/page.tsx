@@ -37,6 +37,7 @@ export default function CalendarPage() {
   const [loading,     setLoading]     = useState(true)
   const [showForm,    setShowForm]    = useState(false)
   const [editDrItem,  setEditDrItem]  = useState<DrItem | null>(null)
+  const [editProject, setEditProject] = useState<{ id: string; tab: 'comments' | 'history' } | null>(null)
 
   /* ─ 프로젝트 탭 필터 ─────────────────────────────────────── */
   const [filterStatus,       setFilterStatus]       = useState('all')
@@ -310,6 +311,7 @@ export default function CalendarPage() {
           onUpdateProgress={handleUpdateProgress}
           onAddProject={handleAddProject}
           onDeleteProjects={handleDeleteProjects}
+          onRequestEdit={(id, tab) => setEditProject({ id, tab })}
           filterBar={
             <div className="flex items-center gap-2 flex-wrap">
               <select
@@ -451,6 +453,20 @@ export default function CalendarPage() {
           onSave={() => { setShowForm(false); fetchAll() }}
         />
       )}
+
+      {/* 프로젝트 코멘트 / 변경 이력 모달 */}
+      {editProject && (() => {
+        const target = projects.find(p => p.id === editProject.id)
+        if (!target) return null
+        return (
+          <ProjectForm
+            project={target}
+            initialTab={editProject.tab}
+            onClose={() => setEditProject(null)}
+            onSave={() => { setEditProject(null); fetchAll() }}
+          />
+        )
+      })()}
 
       {/* DR 추가 폼 */}
       {showForm && tab === 'dr' && (

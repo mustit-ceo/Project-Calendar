@@ -12,7 +12,7 @@ import {
   differenceInCalendarWeeks, getISOWeek,
 } from 'date-fns'
 import { ko } from 'date-fns/locale'
-import { ChevronLeft, ChevronRight, ExternalLink, Check, X, Plus, GripVertical, MoreHorizontal, Copy, Trash2, ListPlus } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ExternalLink, Check, X, Plus, GripVertical, MoreHorizontal, Copy, Trash2, ListPlus, MessageSquare, History } from 'lucide-react'
 
 /* ─ 상태 텍스트 컬러 ────────────────────────────── */
 function StatusText({ status }: { status: string }) {
@@ -692,6 +692,8 @@ interface WeeklyGanttProps {
   onAddProject?: (project: Project) => void
   /** 삭제된 프로젝트 ID 목록 */
   onDeleteProjects?: (ids: string[]) => void
+  /** 액션 메뉴에서 코멘트/변경 이력 클릭 시 부모가 모달 띄우기 */
+  onRequestEdit?: (projectId: string, tab: 'comments' | 'history') => void
   /** 필터 컨트롤을 헤더 우측에 렌더 */
   filterBar?: React.ReactNode
 }
@@ -703,6 +705,7 @@ export function WeeklyGantt({
   highlightId,
   sortMode = 'manual',
   onUpdateProject,
+  onRequestEdit,
   onUpdateProgress,
   onAddProject,
   onDeleteProjects,
@@ -1385,7 +1388,26 @@ export function WeeklyGantt({
                 <Copy size={14} className="text-gray-400 flex-shrink-0" />
                 복제
               </button>
-              {canAdd && <div className="my-1 border-t border-gray-100" />}
+              {onRequestEdit && (
+                <>
+                  <div className="my-1 border-t border-gray-100" />
+                  <button
+                    onClick={() => { setActionMenu(null); onRequestEdit(projectId, 'comments') }}
+                    className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
+                  >
+                    <MessageSquare size={14} className="text-blue-500 flex-shrink-0" />
+                    코멘트
+                  </button>
+                  <button
+                    onClick={() => { setActionMenu(null); onRequestEdit(projectId, 'history') }}
+                    className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
+                  >
+                    <History size={14} className="text-purple-500 flex-shrink-0" />
+                    변경 이력
+                  </button>
+                </>
+              )}
+              <div className="my-1 border-t border-gray-100" />
               <button
                 onClick={() => handleDelete(projectId)}
                 className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
