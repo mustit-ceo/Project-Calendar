@@ -12,18 +12,34 @@ import {
 } from '@/lib/utils'
 import Link from 'next/link'
 
-/* ── 임계치 (1~3 녹색 / 4~5 노랑 / 6~7 빨강 / 8+ 짙은빨강) ─────────── */
-const TH_GREEN = 3
-const TH_YELLOW = 5
-const TH_RED = 7
+/* ── 임계치 (프로젝트와 DR 별도) ───────────────────────── */
+// 프로젝트: 정상 1 / 노란 2~3 / 주의 4~5 / 과부하 6+
+const PROJ_TH = { g: 1, y: 3, r: 5 } as const
+// DR: 정상 1~3 / 노란 4~5 / 주의 6~7 / 과부하 8+
+const DR_TH = { g: 3, y: 5, r: 7 } as const
+
+type LoadBand = 'green' | 'yellow' | 'red' | 'overload'
+
+function classifyLoad(count: number, t: { g: number; y: number; r: number }): LoadBand {
+  if (count <= t.g) return 'green'
+  if (count <= t.y) return 'yellow'
+  if (count <= t.r) return 'red'
+  return 'overload'
+}
+
+const BAND_COLOR: Record<LoadBand, string> = {
+  green:    '#16a34a',
+  yellow:   '#ca8a04',
+  red:      '#dc2626',
+  overload: '#7f1d1d',
+}
 
 const DEPT_ORDER: Record<string, number> = { PM: 0, BE: 1, FE: 2, Design: 3, Oth: 4 }
 
-interface MemberWorkload {
+interface LoadEntry {
   member: TeamMember
-  projects: { id: string; name: string; parentName: string | null }[]
-  drs: { id: string; name: string }[]
-  total: number
+  count: number
+  items: { id: string; name: string; parentName?: string | null }[]
 }
 
 /* ── 유틸 ──────────────────────────────────────── */
@@ -48,14 +64,6 @@ function normalizeAssignees(raw: unknown): string[] {
     } catch { return [] }
   }
   return []
-}
-
-/** 임계치별 막대 색상 (프로젝트 짙은색, DR 옅은색) */
-function getBarColors(count: number): { p: string; dr: string } {
-  if (count <= TH_GREEN)  return { p: '#16a34a', dr: '#bbf7d0' }
-  if (count <= TH_YELLOW) return { p: '#ca8a04', dr: '#fef08a' }
-  if (count <= TH_RED)    return { p: '#dc2626', dr: '#fecaca' }
-  return { p: '#7f1d1d', dr: '#fca5a5' }
 }
 
 function sortMembers(members: TeamMember[]): TeamMember[] {
@@ -182,36 +190,35 @@ export default function DashboardPage() {
     )
 
     const sortedMembers = sortMembers(members)
-    const list: MemberWorkload[] = sortedMembers.map(m => {
+    const projectList: LoadEntry[] = []
+    const projectEmpty: TeamMember[] = []
+    const drList: LoadEntry[] = []
+    const drEmpty: TeamMember[] = []
+
+    for (const m of sortedMembers) {
       const projItems = leafProjectsInWeek
         .filter(p => isAssigned(p, m))
         .map(p => ({ id: p.id, name: p.name, parentName: parentPathOf(p) }))
+      if (projItems.length > 0) {
+        projectList.push({ member: m, count: projItems.length, items: projItems })
+      } else {
+        projectEmpty.push(m)
+      }
 
       const drForMember = activeDr
         .filter(d => normalizeAssignees(d.assignees).some(x => x === m.id || x === m.name))
         .map(d => ({ id: d.id, name: d.name }))
-
-      return {
-        member: m,
-        projects: projItems,
-        drs: drForMember,
-        total: projItems.length + drForMember.length,
+      if (drForMember.length > 0) {
+        drList.push({ member: m, count: drForMember.length, items: drForMember })
+      } else {
+        drEmpty.push(m)
       }
-    })
-
-    const withLoad = list.filter(r => r.total > 0).sort((a, b) => b.total - a.total)
-    const empty    = list.filter(r => r.total === 0)
-
-    // 임계치별 카운트
-    const counts = { overload: 0, red: 0, yellow: 0, green: 0, empty: empty.length }
-    for (const r of withLoad) {
-      if (r.total > TH_RED)         counts.overload++
-      else if (r.total > TH_YELLOW) counts.red++
-      else if (r.total > TH_GREEN)  counts.yellow++
-      else                          counts.green++
     }
 
-    return { withLoad, empty, counts }
+    projectList.sort((a, b) => b.count - a.count)
+    drList.sort((a, b) => b.count - a.count)
+
+    return { projectList, projectEmpty, drList, drEmpty }
   }, [projects, members, progress, drItems, drProgress, weekRange])
 
   /* ── 지연 감지 ───────────────────────────────── */
@@ -269,36 +276,15 @@ export default function DashboardPage() {
         parentPath={parentPath}
       />
 
-      {/* 이번주 멤버별 워크로드 — 부하 랭킹 */}
+      {/* 이번주 멤버별 워크로드 — 좌(프로젝트) / 우(DR) */}
       <section className="bg-white border border-gray-200 rounded-xl p-5 mb-6">
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <h2 className="text-base font-semibold text-gray-900">이번주 멤버별 워크로드</h2>
-            <p className="text-xs text-gray-500 mt-0.5">
-              {format(weekRange.start, 'M/d(EEE)', { locale: ko })} ~ {format(weekRange.end, 'M/d(EEE)', { locale: ko })}
-              <span className="text-gray-300"> · </span>
-              누가 일이 몰려있나
-            </p>
-          </div>
-          <div className="flex items-center gap-3 text-xs text-gray-600">
-            <span className="inline-flex items-center gap-1.5">
-              <span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#1f2937' }} />
-              프로젝트
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#cbd5e1' }} />
-              DR
-            </span>
-          </div>
-        </div>
-
-        {/* 임계치별 요약 */}
-        <div className="flex items-center gap-2 mb-4 flex-wrap">
-          <SummaryChip bg="#7f1d1d" fg="#ffffff" label={`과부하 ${TH_RED + 1}+`}            value={workload.counts.overload} />
-          <SummaryChip bg="#fecaca" fg="#991b1b" label={`주의 ${TH_YELLOW + 1}~${TH_RED}`}    value={workload.counts.red}      />
-          <SummaryChip bg="#fef08a" fg="#854d0e" label={`노란 ${TH_GREEN + 1}~${TH_YELLOW}`}  value={workload.counts.yellow}   />
-          <SummaryChip bg="#bbf7d0" fg="#166534" label={`정상 1~${TH_GREEN}`}                value={workload.counts.green}    />
-          <SummaryChip bg="#f3f4f6" fg="#6b7280" label="비어있음"                            value={workload.counts.empty}    />
+        <div className="mb-4">
+          <h2 className="text-base font-semibold text-gray-900">이번주 멤버별 워크로드</h2>
+          <p className="text-xs text-gray-500 mt-0.5">
+            {format(weekRange.start, 'M/d(EEE)', { locale: ko })} ~ {format(weekRange.end, 'M/d(EEE)', { locale: ko })}
+            <span className="text-gray-300"> · </span>
+            누가 일이 몰려있나
+          </p>
         </div>
 
         {loading ? (
@@ -306,25 +292,24 @@ export default function DashboardPage() {
             <RefreshCw size={20} className="animate-spin mr-2" />
             불러오는 중...
           </div>
-        ) : workload.withLoad.length === 0 && workload.empty.length === 0 ? (
-          <div className="text-sm text-gray-400 text-center py-10">활성 멤버가 없습니다.</div>
         ) : (
-          <div className="space-y-1">
-            {workload.withLoad.length === 0 && (
-              <div className="text-sm text-gray-400 text-center py-6">
-                이번주 배정된 작업이 없습니다.
-              </div>
-            )}
-            {workload.withLoad.map(row => (
-              <WorkloadRow
-                key={row.member.id}
-                row={row}
-                maxLoad={Math.max(8, workload.withLoad[0]?.total ?? 0)}
-              />
-            ))}
-            {workload.empty.length > 0 && (
-              <EmptyMembersBlock empties={workload.empty} />
-            )}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-6 gap-y-4">
+            <WorkloadColumn
+              title="프로젝트"
+              icon="📂"
+              kind="project"
+              list={workload.projectList}
+              empty={workload.projectEmpty}
+              thresholds={PROJ_TH}
+            />
+            <WorkloadColumn
+              title="DR"
+              icon="🔧"
+              kind="dr"
+              list={workload.drList}
+              empty={workload.drEmpty}
+              thresholds={DR_TH}
+            />
           </div>
         )}
       </section>
@@ -345,78 +330,123 @@ function SummaryChip({ bg, fg, label, value }: { bg: string; fg: string; label: 
   )
 }
 
-/* ── 워크로드 행 (멤버별 stacked bar + 펼침) ─── */
-function WorkloadRow({ row, maxLoad }: { row: MemberWorkload; maxLoad: number }) {
+/* ── 워크로드 칼럼 (프로젝트 또는 DR 전용) ───── */
+function WorkloadColumn({
+  title, icon, kind, list, empty, thresholds,
+}: {
+  title: string
+  icon: string
+  kind: 'project' | 'dr'
+  list: LoadEntry[]
+  empty: TeamMember[]
+  thresholds: { g: number; y: number; r: number }
+}) {
+  // 임계치별 인원 수
+  const counts = { overload: 0, red: 0, yellow: 0, green: 0 }
+  for (const r of list) {
+    const band = classifyLoad(r.count, thresholds)
+    counts[band]++
+  }
+
+  // 막대 길이 기준: 임계치 r+1 또는 최대 부하 중 큰 값
+  const maxLoad = Math.max(thresholds.r + 1, list[0]?.count ?? 0)
+
+  return (
+    <div className="flex flex-col">
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-base">{icon}</span>
+        <h3 className="text-sm font-semibold text-gray-800">{title}</h3>
+        <span className="text-xs text-gray-400">· {list.length}명 작업 중</span>
+      </div>
+
+      {/* 임계치별 요약 */}
+      <div className="flex items-center gap-1.5 mb-3 flex-wrap">
+        <SummaryChip bg="#7f1d1d" fg="#ffffff" label={`과 ${thresholds.r + 1}+`}                      value={counts.overload} />
+        <SummaryChip bg="#fecaca" fg="#991b1b" label={`주 ${thresholds.y + 1}~${thresholds.r}`}        value={counts.red}      />
+        <SummaryChip bg="#fef08a" fg="#854d0e" label={`노 ${thresholds.g + 1}~${thresholds.y}`}        value={counts.yellow}   />
+        <SummaryChip bg="#bbf7d0" fg="#166534" label={`정 1${thresholds.g > 1 ? `~${thresholds.g}` : ''}`} value={counts.green} />
+        <SummaryChip bg="#f3f4f6" fg="#6b7280" label="없음"                                            value={empty.length}    />
+      </div>
+
+      {/* 멤버 행 */}
+      <div className="space-y-1 flex-1">
+        {list.length === 0 ? (
+          <div className="text-xs text-gray-400 text-center py-6 bg-gray-50/60 rounded-lg border border-dashed border-gray-200">
+            이번주 {kind === 'dr' ? 'DR' : '프로젝트'} 배정 없음
+          </div>
+        ) : (
+          list.map(row => (
+            <WorkloadRowSingle
+              key={row.member.id}
+              row={row}
+              maxLoad={maxLoad}
+              thresholds={thresholds}
+              kind={kind}
+            />
+          ))
+        )}
+      </div>
+
+      {empty.length > 0 && <EmptyMembersBlock empties={empty} />}
+    </div>
+  )
+}
+
+/* ── 단일 막대 행 ──────────────────────────── */
+function WorkloadRowSingle({
+  row, maxLoad, thresholds, kind,
+}: {
+  row: LoadEntry
+  maxLoad: number
+  thresholds: { g: number; y: number; r: number }
+  kind: 'project' | 'dr'
+}) {
   const [open, setOpen] = useState(false)
-  const colors = getBarColors(row.total)
-  const projWidth = (row.projects.length / maxLoad) * 100
-  const drWidth   = (row.drs.length     / maxLoad) * 100
+  const band  = classifyLoad(row.count, thresholds)
+  const color = BAND_COLOR[band]
+  const w     = Math.min(100, (row.count / maxLoad) * 100)
 
   return (
     <div className="border border-gray-100 rounded-lg overflow-hidden hover:border-gray-200 transition-colors">
       <div
-        className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 cursor-pointer select-none"
+        className="flex items-center gap-2 px-2.5 py-1.5 hover:bg-gray-50 cursor-pointer select-none"
         onClick={() => setOpen(o => !o)}
       >
-        {/* 펼침 인디케이터 */}
         <span className="text-gray-400 flex-shrink-0">
           {open ? <ChevronDown size={14} /> : <ChevronRightIcon size={14} />}
         </span>
 
-        {/* 부서 + 이름 */}
-        <div className="flex items-center gap-2 w-44 flex-shrink-0">
+        <div className="flex items-center gap-1.5 w-32 flex-shrink-0 min-w-0">
           <DeptBadge dept={row.member.department} />
           <span className="text-sm font-medium text-gray-800 truncate">{row.member.name}</span>
-          {row.member.is_leader && (
-            <span className="text-[10px] text-amber-700 bg-amber-100 border border-amber-200 px-1 py-0.5 rounded flex-shrink-0">
-              리더
-            </span>
-          )}
         </div>
 
-        {/* stacked bar */}
-        <div className="flex-1 h-5 bg-gray-100 rounded-md overflow-hidden flex">
-          {row.projects.length > 0 && (
-            <div style={{ width: `${projWidth}%`, background: colors.p }} title={`프로젝트 ${row.projects.length}건`} />
-          )}
-          {row.drs.length > 0 && (
-            <div style={{ width: `${drWidth}%`, background: colors.dr }} title={`DR ${row.drs.length}건`} />
-          )}
+        <div className="flex-1 h-4 bg-gray-100 rounded overflow-hidden">
+          <div style={{ width: `${w}%`, background: color, height: '100%' }} title={`${row.count}건`} />
         </div>
 
-        {/* 숫자 */}
-        <div className="text-xs flex items-center gap-1 w-36 justify-end flex-shrink-0">
-          <span className="font-semibold" style={{ color: colors.p }}>P {row.projects.length}</span>
-          <span className="text-gray-300">·</span>
-          <span className="text-gray-600">DR {row.drs.length}</span>
-          <span className="text-gray-300">·</span>
-          <span className="font-bold text-gray-900 tabular-nums">{row.total}</span>
-        </div>
+        <span className="text-sm font-bold text-gray-900 tabular-nums w-7 text-right flex-shrink-0">
+          {row.count}
+        </span>
       </div>
 
-      {/* 펼침 영역 — 항목 칩 */}
-      {open && (row.projects.length > 0 || row.drs.length > 0) && (
-        <div className="px-3 pb-3 pt-2 bg-gray-50/60 border-t border-gray-100">
+      {open && row.items.length > 0 && (
+        <div className="px-3 pb-2.5 pt-2 bg-gray-50/60 border-t border-gray-100">
           <div className="flex flex-wrap gap-1.5">
-            {row.projects.map(p => (
+            {row.items.map(item => (
               <Link
-                key={p.id}
-                href={`/calendar?task=${p.id}`}
-                className="text-xs bg-white border border-gray-200 rounded px-2 py-1 hover:border-blue-300 hover:bg-blue-50 transition-colors text-gray-700"
-                title={p.parentName ? `${p.parentName} > ${p.name}` : p.name}
+                key={item.id}
+                href={kind === 'dr' ? `/calendar?task=${item.id}&tab=dr` : `/calendar?task=${item.id}`}
+                className={
+                  kind === 'dr'
+                    ? 'text-xs bg-red-50 border border-red-200 text-red-700 rounded px-2 py-1 hover:bg-red-100 transition-colors flex items-center gap-1'
+                    : 'text-xs bg-white border border-gray-200 rounded px-2 py-1 hover:border-blue-300 hover:bg-blue-50 transition-colors text-gray-700'
+                }
+                title={item.parentName ? `${item.parentName} > ${item.name}` : item.name}
               >
-                {p.parentName && <span className="text-gray-400">{p.parentName} &gt; </span>}
-                {p.name}
-              </Link>
-            ))}
-            {row.drs.map(d => (
-              <Link
-                key={d.id}
-                href={`/calendar?task=${d.id}&tab=dr`}
-                className="text-xs bg-red-50 border border-red-200 text-red-700 rounded px-2 py-1 hover:bg-red-100 transition-colors flex items-center gap-1"
-              >
-                <span className="text-[10px] font-bold">DR</span>
-                {d.name}
+                {kind === 'dr' && <span className="text-[10px] font-bold">DR</span>}
+                {item.parentName && <span className="text-gray-400">{item.parentName} &gt; </span>}
+                {item.name}
               </Link>
             ))}
           </div>
@@ -427,7 +457,7 @@ function WorkloadRow({ row, maxLoad }: { row: MemberWorkload; maxLoad: number })
 }
 
 /* ── 작업 없는 멤버 블록 ────────────────────── */
-function EmptyMembersBlock({ empties }: { empties: MemberWorkload[] }) {
+function EmptyMembersBlock({ empties }: { empties: TeamMember[] }) {
   const [open, setOpen] = useState(false)
   if (empties.length === 0) return null
   return (
@@ -441,7 +471,7 @@ function EmptyMembersBlock({ empties }: { empties: MemberWorkload[] }) {
       </button>
       {open && (
         <div className="mt-2 flex flex-wrap gap-2">
-          {empties.map(({ member }) => (
+          {empties.map(member => (
             <span
               key={member.id}
               className="inline-flex items-center gap-1.5 text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded px-2 py-1"
