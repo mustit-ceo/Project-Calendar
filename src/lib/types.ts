@@ -139,3 +139,31 @@ export interface ImprovementRequest {
   created_at: string
   updated_at: string
 }
+
+// ── 프로젝트 변경 이력 ───────────────────────────────────────
+export type HistoryAction = 'create' | 'update' | 'delete'
+export type HistoryField = 'status' | 'start_date' | 'end_date' | 'lts_date'
+
+export interface ProjectHistoryEntry {
+  id: string
+  project_id: string
+  project_name: string
+  changed_by_email: string | null
+  changed_by_name: string | null
+  changed_at: string
+  action: HistoryAction
+  field_name: HistoryField | null
+  old_value: string | null
+  new_value: string | null
+}
+
+// ── 프로젝트 코멘트 ──────────────────────────────────────────
+export interface ProjectComment {
+  id: string
+  project_id: string
+  author_email: string
+  author_name: string | null
+  content: string
+  created_at: string
+  updated_at: string
+}

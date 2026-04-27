@@ -5,6 +5,8 @@ import { Project, Status, Department, TeamMember } from '@/lib/types'
 import { PROJECT_CATEGORIES, STATUSES, DEPARTMENTS } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { X, Check } from 'lucide-react'
+import { ProjectHistory } from './ProjectHistory'
+import { ProjectComments } from './ProjectComments'
 
 interface ProjectFormProps {
   project?: Partial<Project>
@@ -59,6 +61,7 @@ export function ProjectForm({ project, parentId, defaultCategory, isDR = false, 
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const [saving, setSaving] = useState(false)
+  const [activeTab, setActiveTab] = useState<'edit' | 'comments' | 'history'>('edit')
 
   // ── 저장 ─────────────────────────────────────────────────
   async function handleSubmit(e: React.FormEvent) {
@@ -95,16 +98,57 @@ export function ProjectForm({ project, parentId, defaultCategory, isDR = false, 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between px-6 py-4 border-b sticky top-0 bg-white z-10">
-          <h2 className="text-lg font-semibold text-gray-900">
-            {isEdit ? '프로젝트 수정' : parentId ? '하위 태스크 추가' : '프로젝트 추가'}
-          </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 cursor-pointer">
-            <X size={20} />
-          </button>
+        <div className="px-6 pt-4 pb-0 border-b sticky top-0 bg-white z-10">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-semibold text-gray-900">
+              {isEdit ? '프로젝트 수정' : parentId ? '하위 태스크 추가' : '프로젝트 추가'}
+            </h2>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 cursor-pointer">
+              <X size={20} />
+            </button>
+          </div>
+          {/* 탭 (편집 모드일 때만) */}
+          {isEdit && project?.id && (
+            <div className="flex gap-1 -mb-px">
+              {([
+                { key: 'edit',     label: '수정' },
+                { key: 'comments', label: '코멘트' },
+                { key: 'history',  label: '변경 이력' },
+              ] as const).map(t => (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => setActiveTab(t.key)}
+                  className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors cursor-pointer ${
+                    activeTab === t.key
+                      ? 'border-blue-600 text-blue-700'
+                      : 'border-transparent text-gray-500 hover:text-gray-800'
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+        {isEdit && project?.id && activeTab === 'history' && (
+          <div className="p-6">
+            <ProjectHistory projectId={project.id} />
+          </div>
+        )}
+
+        {isEdit && project?.id && activeTab === 'comments' && (
+          <div className="p-6">
+            <ProjectComments projectId={project.id} />
+          </div>
+        )}
+
+        <form
+          onSubmit={handleSubmit}
+          className="p-6 space-y-5"
+          style={{ display: (!isEdit || activeTab === 'edit') ? 'block' : 'none' }}
+        >
           {/* 카테고리 — 프로젝트 모드에서만 표시 (DR 모드는 자동 'DR' 고정) */}
           {!parentId && !isDR && (
             <div>

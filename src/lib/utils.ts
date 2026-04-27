@@ -1,6 +1,6 @@
 import { type ClassValue, clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
-import { Status } from './types'
+import { Status, Project } from './types'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -54,6 +54,66 @@ export function getCompletedProjectDescendants(projects: import('./types').Proje
     }
   }
   return excluded
+}
+
+/* ── 지연 자동 감지 ─────────────────────────────────────────────
+   조건 3가지 — 우선순위 순 (LTS 초과 > 미착수 > 정체)
+   1) lts: lts_date 가 오늘 이전 + 상태 != 완료/보류
+   2) notStarted: 상태 = 대기 + start_date 가 오늘 이전
+   3) stale: 상태 = 진행 + updated_at 가 7일 이상 무변동
+   같은 프로젝트는 가장 심각한 사유 1건으로만 분류된다. */
+export type DelayReason = 'lts' | 'notStarted' | 'stale'
+
+export interface DelayedProject {
+  project: Project
+  reason: DelayReason
+  daysOver: number
+}
+
+export const DELAY_REASON_LABEL: Record<DelayReason, string> = {
+  lts: 'LTS 초과',
+  notStarted: '시작일 초과 미착수',
+  stale: '7일+ 무변동',
+}
+
+export function getDelayedProjects(projects: Project[]): DelayedProject[] {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+  const sevenDaysAgo = new Date(today)
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+
+  const out: DelayedProject[] = []
+  for (const p of projects) {
+    if (p.is_archived) continue
+    if (p.status === '완료' || p.status === '보류') continue
+
+    // 1) LTS 초과
+    if (p.lts_date && p.lts_date < todayKey) {
+      const lts = new Date(p.lts_date)
+      const days = Math.floor((today.getTime() - lts.getTime()) / 86_400_000)
+      out.push({ project: p, reason: 'lts', daysOver: days })
+      continue
+    }
+
+    // 2) 시작일 초과 미착수
+    if (p.status === '대기' && p.start_date && p.start_date < todayKey) {
+      const sd = new Date(p.start_date)
+      const days = Math.floor((today.getTime() - sd.getTime()) / 86_400_000)
+      out.push({ project: p, reason: 'notStarted', daysOver: days })
+      continue
+    }
+
+    // 3) 정체 (진행 중인데 7일+ 변경 없음)
+    if (p.status === '진행' && p.updated_at) {
+      const upd = new Date(p.updated_at)
+      if (upd < sevenDaysAgo) {
+        const days = Math.floor((today.getTime() - upd.getTime()) / 86_400_000)
+        out.push({ project: p, reason: 'stale', daysOver: days })
+      }
+    }
+  }
+  return out
 }
 
 export function buildProjectTree(projects: import('./types').Project[]): import('./types').Project[] {
