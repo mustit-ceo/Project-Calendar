@@ -232,14 +232,29 @@ function GanttDatePopup({
     try {
       const dates = Array.from(selectedDates)
 
-      // 1) task_progress 저장 (해당 프로젝트) ← 핵심: 실패 시에만 중단
-      const { error: delErr } = await supabase
-        .from('task_progress').delete().eq('project_id', projectId)
-      if (delErr) { console.error('[GanttPopup] task_progress delete error:', delErr); return }
+      // 1) task_progress 저장 — 실제 변경된 날짜만 INSERT/DELETE (변경 이력 정확도 위해)
+      const { data: existingRows, error: selErr } = await supabase
+        .from('task_progress')
+        .select('progress_date')
+        .eq('project_id', projectId)
+      if (selErr) { console.error('[GanttPopup] task_progress select error:', selErr); return }
 
-      if (dates.length > 0) {
+      const existingSet = new Set((existingRows ?? []).map(r => r.progress_date as string))
+      const desiredSet = new Set(dates)
+      const toDelete = [...existingSet].filter(d => !desiredSet.has(d))
+      const toInsert = [...desiredSet].filter(d => !existingSet.has(d))
+
+      if (toDelete.length > 0) {
+        const { error: delErr } = await supabase
+          .from('task_progress').delete()
+          .eq('project_id', projectId)
+          .in('progress_date', toDelete)
+        if (delErr) { console.error('[GanttPopup] task_progress delete error:', delErr); return }
+      }
+
+      if (toInsert.length > 0) {
         const { error: insErr } = await supabase.from('task_progress').insert(
-          dates.map(d => ({ project_id: projectId, progress_date: d, label: null }))
+          toInsert.map(d => ({ project_id: projectId, progress_date: d, label: null }))
         )
         if (insErr) { console.error('[GanttPopup] task_progress insert error:', insErr); return }
       }
