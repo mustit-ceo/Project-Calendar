@@ -53,11 +53,11 @@ export default function TimelinePage() {
   const [showCompleted, setShowCompleted] = useState(true)
   const [tooltip, setTooltip] = useState<{ x: number; y: number; content: string } | null>(null)
 
-  // 뷰 상태: 현재월 -1 부터 3개월
-  const [visibleMonths, setVisibleMonths] = useState(3)
+  // 뷰 상태: 기본값 — 당해연도 1월부터 12개월
+  const [visibleMonths, setVisibleMonths] = useState(12)
   const [viewStartDate, setViewStartDate] = useState<Date>(() => {
     const now = new Date()
-    return new Date(now.getFullYear(), now.getMonth() - 1, 1)
+    return new Date(now.getFullYear(), 0, 1)
   })
 
   // ── 드래그 패닝 ──
@@ -216,9 +216,12 @@ export default function TimelinePage() {
   }, [rows, viewStartDate, viewEndDate])
 
   // 줌 변경 시 뷰 시작 월 재계산
-  // 1개월: 현재월 / 2개월: 현재월 / 3개월+: 현재월 -1
+  // 12개월: 당해연도 1월 고정 / 그 외: 현재월 기준 (≤6개월: 현재월 -1)
   function calcViewStart(months: number): Date {
     const now = new Date()
+    if (months >= 12) {
+      return new Date(now.getFullYear(), 0, 1)
+    }
     const offset = months >= 2 ? -1 : 0
     return new Date(now.getFullYear(), now.getMonth() + offset, 1)
   }
