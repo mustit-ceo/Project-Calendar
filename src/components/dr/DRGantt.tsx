@@ -749,12 +749,12 @@ export function DRGantt({
               {COL_KEYS.map(k => (
                 <th
                   key={k}
-                  className="sticky top-0 z-20 bg-gray-50 border-r border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wide p-0"
+                  className="sticky top-0 z-20 bg-gray-50 border-r border-gray-200 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wide p-0"
                   style={{ left: stickyLeft[k], width: widths[k], verticalAlign: 'middle' }}
                 >
                   {k === 'team' ? (
                     <div className="flex w-full h-full items-stretch">
-                      <div className="flex items-center justify-center flex-shrink-0 border-r border-gray-200" style={{ width: 64 }}>
+                      <div className="flex items-center justify-center flex-shrink-0" style={{ width: 64 }}>
                         부서
                       </div>
                       <div className="flex items-center justify-center flex-1">
@@ -767,6 +767,16 @@ export function DRGantt({
                     </div>
                   )}
                   <ResizeHandle onResize={d => resizeCol(k, d)} />
+                  {/* 마지막 sticky 컬럼(team) 우측에 간트 영역과의 그라디언트 구분선 */}
+                  {k === 'team' && (
+                    <div
+                      className="absolute top-0 bottom-0 pointer-events-none"
+                      style={{
+                        left: '100%', width: 14, zIndex: 1,
+                        background: 'linear-gradient(to right, rgba(0,0,0,0.07), transparent)',
+                      }}
+                    />
+                  )}
                 </th>
               ))}
               {/* 날짜 영역: 주차 + 월 + 일자 3단 */}
@@ -989,9 +999,17 @@ export function DRGantt({
 
                   {/* ── 부서/담당자 ── */}
                   <td
-                    className="sticky z-10 border-r border-gray-200 p-0"
+                    className="sticky z-10 border-r border-gray-200 p-0 relative"
                     style={{ left: stickyLeft.team, width: widths.team, background: 'inherit' }}
                   >
+                    {/* 간트 영역과의 그라디언트 구분선 (프로젝트 탭과 동일) */}
+                    <div
+                      className="absolute top-0 bottom-0 pointer-events-none"
+                      style={{
+                        left: '100%', width: 14, zIndex: 1,
+                        background: 'linear-gradient(to right, rgba(0,0,0,0.07), transparent)',
+                      }}
+                    />
                     <div
                       className="flex h-full cursor-pointer hover:bg-blue-50 transition-colors"
                       style={{ paddingTop: ROW_PY, paddingBottom: ROW_PY }}
@@ -1000,7 +1018,7 @@ export function DRGantt({
                         setEditTeamId(item.id)
                       }}
                     >
-                      <div className="flex items-center justify-center flex-shrink-0 border-r border-gray-200" style={{ width: 64 }}>
+                      <div className="flex items-center justify-center flex-shrink-0" style={{ width: 64 }}>
                         {item.department ? <DeptBadge dept={item.department} /> : <span className="text-gray-300 text-xs">-</span>}
                       </div>
                       <div className="flex items-center justify-center min-w-0 flex-1 px-1">
