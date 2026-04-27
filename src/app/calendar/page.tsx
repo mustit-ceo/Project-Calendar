@@ -38,6 +38,7 @@ export default function CalendarPage() {
   const [showForm,    setShowForm]    = useState(false)
   const [editDrItem,  setEditDrItem]  = useState<DrItem | null>(null)
   const [editProject, setEditProject] = useState<{ id: string; tab: 'comments' | 'history' } | null>(null)
+  const [commentCounts, setCommentCounts] = useState<Record<string, number>>({})
 
   /* ─ 프로젝트 탭 필터 ─────────────────────────────────────── */
   const [filterStatus,       setFilterStatus]       = useState('all')
@@ -62,6 +63,7 @@ export default function CalendarPage() {
       { data: drData },
       { data: drProgressData },
       { data: memberData },
+      { data: commentData },
     ] = await Promise.all([
       supabase.from('projects').select('*').eq('is_archived', false)
         .order('sort_order', { ascending: true })
@@ -73,12 +75,19 @@ export default function CalendarPage() {
       supabase.from('dr_progress').select('*'),
       supabase.from('team_members').select('*').eq('is_active', true)
         .order('name', { ascending: true }),
+      supabase.from('project_comments').select('project_id'),
     ])
     setProjects(projectData ?? [])
     setProgressRecords(progressData ?? [])
     setDrItems(drData ?? [])
     setDrProgressRecs(drProgressData ?? [])
     setTeamMembers(memberData ?? [])
+    // 코멘트 카운트 집계 (테이블 미적용 시 commentData 가 null → 빈 맵)
+    const counts: Record<string, number> = {}
+    for (const c of (commentData ?? []) as { project_id: string }[]) {
+      counts[c.project_id] = (counts[c.project_id] ?? 0) + 1
+    }
+    setCommentCounts(counts)
     setLoading(false)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -312,6 +321,7 @@ export default function CalendarPage() {
           onAddProject={handleAddProject}
           onDeleteProjects={handleDeleteProjects}
           onRequestEdit={(id, tab) => setEditProject({ id, tab })}
+          commentCounts={commentCounts}
           filterBar={
             <div className="flex items-center gap-2 flex-wrap">
               <select

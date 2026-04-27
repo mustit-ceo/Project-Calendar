@@ -694,6 +694,8 @@ interface WeeklyGanttProps {
   onDeleteProjects?: (ids: string[]) => void
   /** 액션 메뉴에서 코멘트/변경 이력 클릭 시 부모가 모달 띄우기 */
   onRequestEdit?: (projectId: string, tab: 'comments' | 'history') => void
+  /** 프로젝트 ID → 코멘트 수 (배지 표시용) */
+  commentCounts?: Record<string, number>
   /** 필터 컨트롤을 헤더 우측에 렌더 */
   filterBar?: React.ReactNode
 }
@@ -706,6 +708,7 @@ export function WeeklyGantt({
   sortMode = 'manual',
   onUpdateProject,
   onRequestEdit,
+  commentCounts,
   onUpdateProgress,
   onAddProject,
   onDeleteProjects,
@@ -1754,6 +1757,18 @@ export function WeeklyGantt({
                               )
                             })()}
                           </div>
+                          {/* 코멘트 카운트 배지 (있을 때만 항상 노출) */}
+                          {commentCounts && commentCounts[project.id] > 0 && onRequestEdit && (
+                            <button
+                              type="button"
+                              onClick={e => { e.stopPropagation(); onRequestEdit(project.id, 'comments') }}
+                              className="flex-shrink-0 inline-flex items-center gap-0.5 text-[10px] font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-1.5 py-0.5 rounded-full cursor-pointer transition-colors"
+                              title={`코멘트 ${commentCounts[project.id]}개`}
+                            >
+                              <MessageSquare size={10} />
+                              {commentCounts[project.id]}
+                            </button>
+                          )}
                           {/* ⋯ 액션 버튼: 행 hover 시 노출 */}
                           <button
                             className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity w-5 h-5 rounded flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100"
