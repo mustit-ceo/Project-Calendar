@@ -56,7 +56,9 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        'relative flex flex-col bg-gray-900 text-white transition-all duration-200 ease-in-out flex-shrink-0',
+        // sticky + h-screen: 페이지 컨텐츠가 길어져도 viewport 높이에 고정,
+        // 하단 로그인 정보가 항상 보이도록
+        'sticky top-0 self-start h-screen flex flex-col bg-gray-900 text-white transition-all duration-200 ease-in-out flex-shrink-0',
         collapsed ? 'w-14' : 'w-56'
       )}
     >
