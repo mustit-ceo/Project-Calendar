@@ -142,7 +142,7 @@ export interface ImprovementRequest {
 
 // ── 프로젝트 변경 이력 ───────────────────────────────────────
 export type HistoryAction = 'create' | 'update' | 'delete'
-export type HistoryField = 'status' | 'start_date' | 'end_date' | 'lts_date'
+export type HistoryField = 'status' | 'start_date' | 'end_date' | 'lts_date' | 'progress'
 
 export interface ProjectHistoryEntry {
   id: string

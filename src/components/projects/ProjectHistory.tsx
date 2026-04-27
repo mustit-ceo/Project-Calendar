@@ -18,6 +18,7 @@ const FIELD_LABEL: Record<HistoryField, string> = {
   start_date: '시작일',
   end_date:   '종료일',
   lts_date:   'LTS 일자',
+  progress:   '작업일자',
 }
 
 const FIELD_ICON: Record<HistoryField, React.ElementType> = {
@@ -25,6 +26,7 @@ const FIELD_ICON: Record<HistoryField, React.ElementType> = {
   start_date: CalendarIcon,
   end_date:   CalendarIcon,
   lts_date:   CalendarIcon,
+  progress:   CalendarIcon,
 }
 
 function formatValue(field: HistoryField | null, v: string | null): string {
@@ -103,10 +105,18 @@ export function ProjectHistory({ projectId }: Props) {
         let color = '#6b7280'
         let bg = '#f3f4f6'
 
+        // progress 필드 추가/삭제 판정
+        const isProgressAdd = e.action === 'update' && e.field_name === 'progress' && e.old_value === null
+        const isProgressRemove = e.action === 'update' && e.field_name === 'progress' && e.new_value === null
+
         if (e.action === 'create') {
           icon = Plus; label = '생성됨'; color = '#15803d'; bg = '#dcfce7'
         } else if (e.action === 'delete') {
           icon = Trash2; label = '삭제됨'; color = '#991b1b'; bg = '#fee2e2'
+        } else if (isProgressAdd) {
+          icon = Plus; label = '작업일자 추가'; color = '#15803d'; bg = '#dcfce7'
+        } else if (isProgressRemove) {
+          icon = Trash2; label = '작업일자 삭제'; color = '#991b1b'; bg = '#fee2e2'
         } else if (e.action === 'update' && e.field_name) {
           icon = FIELD_ICON[e.field_name] ?? Pencil
           label = `${FIELD_LABEL[e.field_name] ?? e.field_name} 변경`
@@ -138,7 +148,19 @@ export function ProjectHistory({ projectId }: Props) {
                     {formatRelative(e.changed_at)}
                   </span>
                 </div>
-                {e.action === 'update' && e.field_name && (
+                {isProgressAdd ? (
+                  <div className="text-xs text-gray-600 mt-1">
+                    <span className="bg-green-50 text-green-700 px-1.5 py-0.5 rounded font-medium">
+                      {e.new_value}
+                    </span>
+                  </div>
+                ) : isProgressRemove ? (
+                  <div className="text-xs text-gray-600 mt-1">
+                    <span className="bg-gray-100 px-1.5 py-0.5 rounded line-through text-gray-500">
+                      {e.old_value}
+                    </span>
+                  </div>
+                ) : e.action === 'update' && e.field_name && (
                   <div className="text-xs text-gray-600 mt-1">
                     <span className="bg-gray-100 px-1.5 py-0.5 rounded line-through text-gray-500">
                       {formatValue(e.field_name, e.old_value)}
