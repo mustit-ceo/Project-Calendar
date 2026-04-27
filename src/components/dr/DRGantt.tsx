@@ -473,6 +473,7 @@ export function DRGantt({
   /* ─ 스크롤 ───────────────────────────────────────────────── */
   const tableScrollRef = useRef<HTMLDivElement>(null)
   const monthTextRef   = useRef<HTMLSpanElement>(null)
+  const headerInnerRef = useRef<HTMLDivElement>(null)
   const isDraggingRef  = useRef(false)
 
   /* ─ 마우스 드래그 팬 ─────────────────────────────────────── */
@@ -490,9 +491,14 @@ export function DRGantt({
 
   const handleTableScroll = useCallback(() => {
     const el = tableScrollRef.current
-    if (!el || !monthTextRef.current) return
-    const i = Math.max(0, Math.min(yearDays.length - 1, Math.floor(el.scrollLeft / DAY_W)))
-    monthTextRef.current.textContent = format(yearDays[i], 'yyyy년 M월', { locale: ko })
+    if (!el) return
+    if (monthTextRef.current) {
+      const i = Math.max(0, Math.min(yearDays.length - 1, Math.floor(el.scrollLeft / DAY_W)))
+      monthTextRef.current.textContent = format(yearDays[i], 'yyyy년 M월', { locale: ko })
+    }
+    if (headerInnerRef.current) {
+      headerInnerRef.current.style.transform = `translateX(-${el.scrollLeft}px)`
+    }
   }, [yearDays])
 
   const scrollToMonth = useCallback((targetDate: Date) => {
@@ -502,6 +508,7 @@ export function DRGantt({
     const left = Math.max(0, idx * DAY_W)
     if (tableScrollRef.current) tableScrollRef.current.scrollLeft = left
     if (monthTextRef.current) monthTextRef.current.textContent = format(targetDate, 'yyyy년 M월', { locale: ko })
+    if (headerInnerRef.current) headerInnerRef.current.style.transform = `translateX(-${left}px)`
   }, [yearDays])
 
   const currentMonth = () => {
@@ -700,14 +707,104 @@ export function DRGantt({
             </div>
           )}
         </div>
+
+        {/* ── 컬럼/일자 헤더 (sticky 영역 내부, body 와 가로 스크롤 동기화) ── */}
+        <div className="relative border-x border-t border-gray-200 rounded-t-xl overflow-hidden bg-gray-50">
+          {/* 4 고정 컬럼 헤더 (absolute, 가로 스크롤 영향 없음) */}
+          <div
+            className="absolute top-0 left-0 z-30 flex bg-gray-50"
+            style={{ width: totalFixedW, height: 30 + 30 + 34 }}
+          >
+            {COL_KEYS.map(k => (
+              <div
+                key={k}
+                className="relative flex bg-gray-50 select-none border-r border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wide"
+                style={{ width: widths[k], flexShrink: 0 }}
+              >
+                {k === 'team' ? (
+                  <div className="flex w-full h-full items-stretch">
+                    <div className="flex items-center justify-center flex-shrink-0" style={{ width: 64 }}>부서</div>
+                    <div className="flex items-center justify-center flex-1">담당자</div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center w-full h-full">
+                    {k === 'name' ? 'DR' : k === 'jira' ? 'JIRA' : '상태'}
+                  </div>
+                )}
+                <ResizeHandle onResize={d => resizeCol(k, d)} />
+                {k === 'team' && (
+                  <div
+                    className="absolute top-0 bottom-0 pointer-events-none"
+                    style={{
+                      left: '100%', width: 14, zIndex: 1,
+                      background: 'linear-gradient(to right, rgba(0,0,0,0.07), transparent)',
+                    }}
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+          {/* 일자 영역 (가로 스크롤 동기화) */}
+          <div className="overflow-hidden" style={{ marginLeft: totalFixedW }}>
+            <div ref={headerInnerRef} style={{ width: dateAreaW }}>
+              {/* 주차 행 */}
+              <div className="relative border-b border-gray-200" style={{ height: 30 }}>
+                {yearWeeks.map((w, wi) => (
+                  <div
+                    key={wi}
+                    className="absolute top-0 flex items-center justify-center select-none border-l border-gray-300"
+                    style={{ left: wi * 5 * DAY_W, width: 5 * DAY_W, height: 30 }}
+                  >
+                    <span className="text-sm font-bold text-gray-700">{getISOWeek(w)}w</span>
+                  </div>
+                ))}
+              </div>
+              {/* 월 행 */}
+              <div className="relative border-b border-gray-300 bg-gray-50" style={{ height: 30 }}>
+                {monthSpans.map((sp, i) => (
+                  <div
+                    key={i}
+                    className="absolute top-0 flex items-center justify-center select-none border-l-2 border-gray-400"
+                    style={{ left: sp.left, width: sp.width, height: 30 }}
+                  >
+                    <span className="text-xs font-bold text-gray-600 tracking-wide">{sp.label}</span>
+                  </div>
+                ))}
+              </div>
+              {/* 일자 행 */}
+              <div className="relative bg-white border-b border-gray-200" style={{ height: 34 }}>
+                {yearDays.map((d, di) => {
+                  const isToday      = isSameDay(d, today)
+                  const isMonday     = di % 5 === 0
+                  const isMonthStart = di > 0 && format(d, 'M') !== format(yearDays[di - 1], 'M')
+                  return (
+                    <div
+                      key={di}
+                      className={`absolute top-0 flex flex-col items-center justify-center select-none
+                        ${isMonthStart ? 'border-l-2 border-gray-400' : isMonday ? 'border-l border-gray-300' : ''}
+                        ${isToday ? 'bg-red-50' : ''}`}
+                      style={{ left: di * DAY_W, width: DAY_W, height: 34 }}
+                    >
+                      <span className={`text-xs font-medium leading-none ${isToday ? 'text-red-500' : 'text-gray-400'}`}>
+                        {format(d, 'd')}
+                      </span>
+                      <span className={`text-[10px] leading-none mt-0.5 ${isToday ? 'text-red-300' : 'text-gray-300'}`}>
+                        {format(d, 'E', { locale: ko })}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* 테이블 */}
       <div
         ref={tableScrollRef}
-        className="overflow-auto select-none border border-gray-200 rounded-xl"
+        className="overflow-x-auto select-none border border-gray-200 rounded-xl"
         style={{
-          maxHeight: 'calc(100vh - 220px)',
           scrollbarWidth: 'none',
           msOverflowStyle: 'none',
           cursor: isPanning ? 'grabbing' : 'default',
@@ -743,96 +840,10 @@ export function DRGantt({
         }}
       >
         <table className="border-collapse" style={{ width: tableWidth, tableLayout: 'fixed' }}>
-          {/* ── 헤더 ── */}
-          <thead>
-            <tr>
-              {/* 고정 컬럼 레이블 */}
-              {COL_KEYS.map(k => (
-                <th
-                  key={k}
-                  className="sticky top-0 z-20 bg-gray-50 border-r border-gray-200 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wide p-0"
-                  style={{ left: stickyLeft[k], width: widths[k], verticalAlign: 'middle' }}
-                >
-                  {k === 'team' ? (
-                    <div className="flex w-full h-full items-stretch">
-                      <div className="flex items-center justify-center flex-shrink-0" style={{ width: 64 }}>
-                        부서
-                      </div>
-                      <div className="flex items-center justify-center flex-1">
-                        담당자
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-center w-full h-full">
-                      {k === 'name' ? 'DR' : k === 'jira' ? 'JIRA' : '상태'}
-                    </div>
-                  )}
-                  <ResizeHandle onResize={d => resizeCol(k, d)} />
-                  {/* 마지막 sticky 컬럼(team) 우측에 간트 영역과의 그라디언트 구분선 */}
-                  {k === 'team' && (
-                    <div
-                      className="absolute top-0 bottom-0 pointer-events-none"
-                      style={{
-                        left: '100%', width: 14, zIndex: 1,
-                        background: 'linear-gradient(to right, rgba(0,0,0,0.07), transparent)',
-                      }}
-                    />
-                  )}
-                </th>
-              ))}
-              {/* 날짜 영역: 주차 + 월 + 일자 3단 */}
-              <th className="sticky top-0 z-10 bg-gray-50 p-0" style={{ width: dateAreaW }}>
-                {/* 주차 행 */}
-                <div className="relative border-b border-gray-200" style={{ height: 30 }}>
-                  {yearWeeks.map((w, wi) => (
-                    <div
-                      key={wi}
-                      className="absolute top-0 flex items-center justify-center select-none border-l border-gray-300"
-                      style={{ left: wi * 5 * DAY_W, width: 5 * DAY_W, height: 30 }}
-                    >
-                      <span className="text-sm font-bold text-gray-700">{getISOWeek(w)}w</span>
-                    </div>
-                  ))}
-                </div>
-                {/* 월 행 */}
-                <div className="relative border-b border-gray-300 bg-gray-50" style={{ height: 30 }}>
-                  {monthSpans.map((s, i) => (
-                    <div
-                      key={i}
-                      className="absolute top-0 flex items-center justify-center select-none border-l-2 border-gray-400"
-                      style={{ left: s.left, width: s.width, height: 30 }}
-                    >
-                      <span className="text-xs font-bold text-gray-600 tracking-wide">{s.label}</span>
-                    </div>
-                  ))}
-                </div>
-                {/* 날짜 행 */}
-                <div className="relative bg-white border-b border-gray-200" style={{ height: 34 }}>
-                  {yearDays.map((d, di) => {
-                    const isToday      = isSameDay(d, today)
-                    const isMonday     = di % 5 === 0
-                    const isMonthStart = di > 0 && format(d, 'M') !== format(yearDays[di - 1], 'M')
-                    return (
-                      <div
-                        key={di}
-                        className={`absolute top-0 flex flex-col items-center justify-center select-none
-                          ${isMonthStart ? 'border-l-2 border-gray-400' : isMonday ? 'border-l border-gray-300' : ''}
-                          ${isToday ? 'bg-red-50' : ''}`}
-                        style={{ left: di * DAY_W, width: DAY_W, height: 34 }}
-                      >
-                        <span className={`text-xs font-medium leading-none ${isToday ? 'text-red-500' : 'text-gray-400'}`}>
-                          {format(d, 'd')}
-                        </span>
-                        <span className={`text-[10px] leading-none mt-0.5 ${isToday ? 'text-red-300' : 'text-gray-300'}`}>
-                          {format(d, 'E', { locale: ko })}
-                        </span>
-                      </div>
-                    )
-                  })}
-                </div>
-              </th>
-            </tr>
-          </thead>
+          <colgroup>
+            {COL_KEYS.map(k => <col key={k} style={{ width: widths[k] }} />)}
+            <col style={{ width: dateAreaW }} />
+          </colgroup>
 
           {/* ── 바디 ── */}
           <tbody>

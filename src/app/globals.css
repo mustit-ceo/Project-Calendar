@@ -19,8 +19,11 @@
   }
 }
 
+/* 페이지 레벨 가로 스크롤 방지: html/body 에 overflow-x:hidden 을 주면
+   spec 상 overflow-y 도 auto 가 되어 sticky 의 scroll context 가 깨지므로
+   대신 body 에 max-width 와 visible overflow 만 두고 가로 클립은 main 컨테이너 쪽에서 처리. */
 html, body {
-  overflow-x: hidden;  /* 페이지 레벨 가로 스크롤 방지 */
+  max-width: 100%;
 }
 
 body {
