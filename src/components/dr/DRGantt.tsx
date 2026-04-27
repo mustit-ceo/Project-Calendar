@@ -387,10 +387,14 @@ type ColKey = keyof typeof DEFAULT_WIDTHS
 const COL_KEYS: ColKey[] = ['name', 'jira', 'status', 'team']
 
 /* ─ DRGantt Props ───────────────────────────────────────────── */
+export type DrSortMode = 'manual' | 'startAsc' | 'lastDesc'
+
 interface DRGanttProps {
   items: DrItem[]
   progressRecords: DrProgress[]
   teamMembers: TeamMember[]
+  /** 정렬 모드 (기본 'manual' = sort_order 순) */
+  sortMode?: DrSortMode
   onUpdateItem: (id: string, updates: Partial<DrItem>) => void
   onUpdateProgress: (drId: string, dates: string[]) => void
   onAddItem: (item: DrItem) => void
@@ -401,6 +405,7 @@ interface DRGanttProps {
 /* ─ 메인 컴포넌트 ───────────────────────────────────────────── */
 export function DRGantt({
   items, progressRecords, teamMembers,
+  sortMode = 'manual',
   onUpdateItem, onUpdateProgress, onAddItem, onDeleteItems,
   filterBar,
 }: DRGanttProps) {
@@ -869,6 +874,8 @@ export function DRGantt({
                   style={{ background: '#ffffff', opacity: dragId === item.id ? 0.35 : 1 }}
                   draggable
                   onDragStart={e => {
+                    // 기본 정렬에서만 순서 변경 허용 (다른 정렬 모드에선 드래그 차단)
+                    if (sortMode !== 'manual') { e.preventDefault(); return }
                     if (!dragHandleDownRef.current) { e.preventDefault(); return }
                     dragHandleDownRef.current = false
                     dragIdRef.current = item.id
@@ -906,9 +913,18 @@ export function DRGantt({
                   >
                     <div className="flex items-center gap-1 min-w-0">
                       <div
-                        className="flex-shrink-0 opacity-0 group-hover:opacity-40 cursor-grab active:cursor-grabbing text-gray-400"
-                        onMouseDown={() => { dragHandleDownRef.current = true; isDraggingRef.current = true }}
+                        className={`flex-shrink-0 opacity-0 group-hover:opacity-40 ${
+                          sortMode === 'manual'
+                            ? 'cursor-grab active:cursor-grabbing text-gray-400'
+                            : 'cursor-not-allowed text-gray-300'
+                        }`}
+                        onMouseDown={() => {
+                          if (sortMode !== 'manual') return
+                          dragHandleDownRef.current = true
+                          isDraggingRef.current = true
+                        }}
                         onMouseUp={() => { isDraggingRef.current = false }}
+                        title={sortMode === 'manual' ? '드래그하여 순서 변경' : '기본 정렬에서만 순서 변경 가능합니다'}
                       >
                         <GripVertical size={14} />
                       </div>

@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Project, TaskProgress, TeamMember, DrItem, DrProgress } from '@/lib/types'
 import { WeeklyGantt, type SortMode } from '@/components/calendar/WeeklyGantt'
-import { DRGantt } from '@/components/dr/DRGantt'
+import { DRGantt, type DrSortMode } from '@/components/dr/DRGantt'
 import { ProjectForm } from '@/components/projects/ProjectForm'
 import { DrForm } from '@/components/dr/DrForm'
 import {
@@ -50,6 +50,7 @@ export default function CalendarPage() {
   const [drFilterStatus,  setDrFilterStatus]  = useState('all')
   const [drFilterDept,    setDrFilterDept]    = useState('all')
   const [drHideCompleted, setDrHideCompleted] = useState(true)
+  const [drSortMode,      setDrSortMode]      = useState<DrSortMode>('manual')
 
   /* ─ Fetch ────────────────────────────────────────────────── */
   const fetchAll = useCallback(async () => {
@@ -195,11 +196,14 @@ export default function CalendarPage() {
     return true
   })
 
-  /* ─ DR 필터링 + 정렬 (progress_date 빠른 순) ───────────────── */
+  /* ─ DR 필터링 + 정렬 ──────────────────────────────────────── */
   const drMinDate = new Map<string, string>()
+  const drMaxDate = new Map<string, string>()
   for (const r of drProgressRecs) {
-    const cur = drMinDate.get(r.dr_id)
-    if (!cur || r.progress_date < cur) drMinDate.set(r.dr_id, r.progress_date)
+    const minCur = drMinDate.get(r.dr_id)
+    if (!minCur || r.progress_date < minCur) drMinDate.set(r.dr_id, r.progress_date)
+    const maxCur = drMaxDate.get(r.dr_id)
+    if (!maxCur || r.progress_date > maxCur) drMaxDate.set(r.dr_id, r.progress_date)
   }
 
   const filteredDrItems = drItems
@@ -210,19 +214,31 @@ export default function CalendarPage() {
       return true
     })
     .sort((a, b) => {
-      const aMin = drMinDate.get(a.id) ?? ''
-      const bMin = drMinDate.get(b.id) ?? ''
-      if (!aMin && !bMin) return 0
-      if (!aMin) return 1
-      if (!bMin) return -1
-      return aMin.localeCompare(bMin)
+      if (drSortMode === 'startAsc') {
+        const aMin = drMinDate.get(a.id) ?? ''
+        const bMin = drMinDate.get(b.id) ?? ''
+        if (!aMin && !bMin) return 0
+        if (!aMin) return 1
+        if (!bMin) return -1
+        return aMin.localeCompare(bMin)
+      }
+      if (drSortMode === 'lastDesc') {
+        const aMax = drMaxDate.get(a.id) ?? ''
+        const bMax = drMaxDate.get(b.id) ?? ''
+        if (!aMax && !bMax) return 0
+        if (!aMax) return 1
+        if (!bMax) return -1
+        return bMax.localeCompare(aMax)
+      }
+      // manual — DB sort_order 순 (drItems는 fetchAll에서 sort_order 오름차순)
+      return a.sort_order - b.sort_order
     })
 
   const resetFilters   = () => { setFilterStatus('all'); setFilterDept('all'); setFilterCategory('all'); setSortMode('manual') }
-  const resetDrFilters = () => { setDrFilterStatus('all'); setDrFilterDept('all') }
+  const resetDrFilters = () => { setDrFilterStatus('all'); setDrFilterDept('all'); setDrSortMode('manual') }
 
   const isDirty   = filterStatus !== 'all' || filterDept !== 'all' || filterCategory !== 'all' || sortMode !== 'manual'
-  const isDrDirty = drFilterStatus !== 'all' || drFilterDept !== 'all'
+  const isDrDirty = drFilterStatus !== 'all' || drFilterDept !== 'all' || drSortMode !== 'manual'
 
   /* ─ 렌더 ─────────────────────────────────────────────────── */
   return (
@@ -369,6 +385,7 @@ export default function CalendarPage() {
           items={filteredDrItems}
           progressRecords={drProgressRecs}
           teamMembers={teamMembers}
+          sortMode={drSortMode}
           onUpdateItem={handleUpdateDrItem}
           onUpdateProgress={handleUpdateDrProgress}
           onAddItem={handleAddDrItem}
@@ -390,6 +407,19 @@ export default function CalendarPage() {
               >
                 <option value="all">전체 부서</option>
                 {DR_DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
+              </select>
+
+              <div className="w-px h-4 bg-gray-200 mx-0.5" />
+
+              <select
+                value={drSortMode}
+                onChange={e => setDrSortMode(e.target.value as DrSortMode)}
+                className="px-2.5 py-1 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400 cursor-pointer"
+                title={drSortMode === 'manual' ? '드래그로 순서 변경 가능' : '드래그 순서 변경은 기본 정렬에서만 가능'}
+              >
+                <option value="manual">기본 (수동 순서)</option>
+                <option value="startAsc">시작일 오래된순</option>
+                <option value="lastDesc">마지막 작업일 최근순</option>
               </select>
 
               <div className="w-px h-4 bg-gray-200 mx-0.5" />
