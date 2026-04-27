@@ -77,6 +77,26 @@ function getProgressSegments(
   return segs
 }
 
+/* ─ ResizeHandle: 컬럼 너비 조절 (프로젝트 탭과 동일) ────── */
+function ResizeHandle({ onResize }: { onResize: (delta: number) => void }) {
+  const startX = useRef(0)
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    startX.current = e.clientX
+    const onMove = (ev: MouseEvent) => { onResize(ev.clientX - startX.current); startX.current = ev.clientX }
+    const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp) }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  }
+  return (
+    <div
+      onMouseDown={handleMouseDown}
+      className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-blue-400 z-10"
+    />
+  )
+}
+
 /* ─ 상태 텍스트 컬러 (프로젝트 탭과 동일) ────────────────── */
 function StatusText({ status }: { status: string }) {
   const color =
@@ -729,10 +749,24 @@ export function DRGantt({
               {COL_KEYS.map(k => (
                 <th
                   key={k}
-                  className="sticky top-0 z-20 bg-gray-50 border-r border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wide"
-                  style={{ left: stickyLeft[k], width: widths[k], verticalAlign: 'middle', textAlign: 'center' }}
+                  className="sticky top-0 z-20 bg-gray-50 border-r border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wide p-0"
+                  style={{ left: stickyLeft[k], width: widths[k], verticalAlign: 'middle' }}
                 >
-                  {k === 'name' ? 'DR' : k === 'jira' ? 'JIRA' : k === 'status' ? '상태' : '부서 / 담당자'}
+                  {k === 'team' ? (
+                    <div className="flex w-full h-full items-stretch">
+                      <div className="flex items-center justify-center flex-shrink-0 border-r border-gray-200" style={{ width: 64 }}>
+                        부서
+                      </div>
+                      <div className="flex items-center justify-center flex-1">
+                        담당자
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center w-full h-full">
+                      {k === 'name' ? 'DR' : k === 'jira' ? 'JIRA' : '상태'}
+                    </div>
+                  )}
+                  <ResizeHandle onResize={d => resizeCol(k, d)} />
                 </th>
               ))}
               {/* 날짜 영역: 주차 + 월 + 일자 3단 */}
@@ -966,10 +1000,10 @@ export function DRGantt({
                         setEditTeamId(item.id)
                       }}
                     >
-                      <div className="flex items-center justify-center flex-shrink-0" style={{ width: 64 }}>
+                      <div className="flex items-center justify-center flex-shrink-0 border-r border-gray-200" style={{ width: 64 }}>
                         {item.department ? <DeptBadge dept={item.department} /> : <span className="text-gray-300 text-xs">-</span>}
                       </div>
-                      <div className="flex items-center min-w-0 flex-1 px-1">
+                      <div className="flex items-center justify-center min-w-0 flex-1 px-1">
                         {(() => {
                           const names = (item.assignees ?? []).map(id => {
                             const m = teamMembers.find(t => t.id === id || t.name === id)
@@ -977,7 +1011,7 @@ export function DRGantt({
                           })
                           if (!names.length) return <span className="text-gray-300 text-xs">-</span>
                           return (
-                            <span className="text-xs text-gray-600 truncate">
+                            <span className="text-xs text-gray-600 truncate text-center">
                               {names[0]}{names.length > 1 && <span className="text-gray-400"> +{names.length - 1}</span>}
                             </span>
                           )
