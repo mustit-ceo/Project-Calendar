@@ -2,10 +2,10 @@
 
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Project, TeamMember, Department } from '@/lib/types'
+import { Project, TeamMember, DrItem, DrProgress } from '@/lib/types'
 import { format, addDays, getDay } from 'date-fns'
 import { ko } from 'date-fns/locale'
-import { RefreshCw, AlertTriangle, Clock, CalendarX, Pause } from 'lucide-react'
+import { RefreshCw, AlertTriangle, Clock, CalendarX, Pause, ChevronDown, ChevronRight as ChevronRightIcon } from 'lucide-react'
 import { DeptBadge } from '@/components/ui/DeptBadge'
 import {
   getDelayedProjects, DELAY_REASON_LABEL, DelayedProject, DelayReason,
@@ -17,22 +17,13 @@ const TH_GREEN = 3
 const TH_YELLOW = 5
 const TH_RED = 7
 
-const NUM_WEEKS = 8
-
 const DEPT_ORDER: Record<string, number> = { PM: 0, BE: 1, FE: 2, Design: 3, Oth: 4 }
 
-interface Week {
-  key: string
-  label: string       // "M/d"
-  sublabel: string    // "W##"
-  start: Date         // Monday 00:00
-  end: Date           // Sunday 23:59
-  isCurrent: boolean
-}
-
-interface CellInfo {
-  count: number
+interface MemberWorkload {
+  member: TeamMember
   projects: { id: string; name: string; parentName: string | null }[]
+  drs: { id: string; name: string }[]
+  total: number
 }
 
 /* ── 유틸 ──────────────────────────────────────── */
@@ -66,26 +57,6 @@ function normalizeAssignees(raw: unknown): string[] {
   return []
 }
 
-function buildWeeks(today: Date, n: number): Week[] {
-  const monday = getMondayOfWeek(today)
-  const todayKey = format(today, 'yyyy-MM-dd')
-  return Array.from({ length: n }, (_, i) => {
-    const start = addDays(monday, i * 7)
-    const end = endOfDay(addDays(start, 6))
-    const isCurrent =
-      format(start, 'yyyy-MM-dd') <= todayKey &&
-      todayKey <= format(end, 'yyyy-MM-dd')
-    return {
-      key: format(start, 'yyyy-MM-dd'),
-      label: `${format(start, 'M/d', { locale: ko })}~${format(end, 'M/d', { locale: ko })}`,
-      sublabel: `W${format(start, 'w', { locale: ko })}`,
-      start,
-      end,
-      isCurrent,
-    }
-  })
-}
-
 /** 주 범위 [ws, we]와 프로젝트 기간이 겹치는가? */
 function overlapsWeek(p: Project, weekStart: Date, weekEnd: Date): boolean {
   const s = parseYMD(p.start_date)
@@ -96,13 +67,12 @@ function overlapsWeek(p: Project, weekStart: Date, weekEnd: Date): boolean {
   return start <= weekEnd && end >= weekStart
 }
 
-/** 셀 색상 결정 */
-function getCellStyle(count: number): { bg: string; text: string; border: string } {
-  if (count === 0) return { bg: '#f9fafb', text: '#d1d5db', border: '#f3f4f6' }
-  if (count <= TH_GREEN) return { bg: '#bbf7d0', text: '#166534', border: '#86efac' }
-  if (count <= TH_YELLOW) return { bg: '#fef08a', text: '#854d0e', border: '#fde047' }
-  if (count <= TH_RED) return { bg: '#fecaca', text: '#991b1b', border: '#fca5a5' }
-  return { bg: '#dc2626', text: '#ffffff', border: '#b91c1c' }
+/** 임계치별 막대 색상 (프로젝트 짙은색, DR 옅은색) */
+function getBarColors(count: number): { p: string; dr: string } {
+  if (count <= TH_GREEN)  return { p: '#16a34a', dr: '#bbf7d0' }
+  if (count <= TH_YELLOW) return { p: '#ca8a04', dr: '#fef08a' }
+  if (count <= TH_RED)    return { p: '#dc2626', dr: '#fecaca' }
+  return { p: '#7f1d1d', dr: '#fca5a5' }
 }
 
 function sortMembers(members: TeamMember[]): TeamMember[] {
@@ -118,9 +88,11 @@ function sortMembers(members: TeamMember[]): TeamMember[] {
 /* ── 페이지 ─────────────────────────────────────── */
 export default function DashboardPage() {
   const supabase = createClient()
-  const [projects, setProjects] = useState<Project[]>([])
-  const [members, setMembers] = useState<TeamMember[]>([])
-  const [loading, setLoading] = useState(true)
+  const [projects,  setProjects]  = useState<Project[]>([])
+  const [members,   setMembers]   = useState<TeamMember[]>([])
+  const [drItems,   setDrItems]   = useState<DrItem[]>([])
+  const [drProgress, setDrProgress] = useState<DrProgress[]>([])
+  const [loading,   setLoading]   = useState(true)
   // null = 확인 중 / true = 관리자 / false = 권한 없음
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null)
 
@@ -138,23 +110,36 @@ export default function DashboardPage() {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const today = useMemo(() => new Date(), [])
-  const weeks = useMemo(() => buildWeeks(today, NUM_WEEKS), [today])
+  const weekRange = useMemo(() => {
+    const monday = getMondayOfWeek(today)
+    const sunday = endOfDay(addDays(monday, 6))
+    return { start: monday, end: sunday }
+  }, [today])
 
   const fetchAll = useCallback(async () => {
     setLoading(true)
-    const [{ data: projData }, { data: memData }] = await Promise.all([
+    const [
+      { data: projData },
+      { data: memData },
+      { data: drData },
+      { data: drProgData },
+    ] = await Promise.all([
       supabase.from('projects').select('*').eq('is_archived', false),
       supabase.from('team_members').select('*').eq('is_active', true),
+      supabase.from('dr_items').select('*').eq('is_archived', false),
+      supabase.from('dr_progress').select('*'),
     ])
     setProjects((projData ?? []) as Project[])
     setMembers((memData ?? []) as TeamMember[])
+    setDrItems((drData ?? []) as DrItem[])
+    setDrProgress((drProgData ?? []) as DrProgress[])
     setLoading(false)
   }, [])
 
   useEffect(() => { fetchAll() }, [fetchAll])
 
-  /* ── 워크로드 매트릭스 계산 ──────────────────── */
-  const matrix = useMemo(() => {
+  /* ── 이번주 워크로드 계산 (프로젝트 + DR) ─────── */
+  const workload = useMemo(() => {
     const projectMap = new Map(projects.map(p => [p.id, p]))
     // 자기 자신/조상 체인에 멤버가 담당자인지
     const isAssigned = (p: Project, member: TeamMember): boolean => {
@@ -169,15 +154,7 @@ export default function DashboardPage() {
       return false
     }
 
-    // 진행 가능 상태만 (완료/보류 제외)
-    const activeProjects = projects.filter(p => p.status !== '완료' && p.status !== '보류')
-
-    // leaf 판정: 자식이 없는 프로젝트
-    const parentIds = new Set(projects.filter(p => p.parent_id).map(p => p.parent_id))
-    const leafProjects = activeProjects.filter(p => !parentIds.has(p.id))
-
-    // 부모 경로 표시 헬퍼
-    const parentPath = (p: Project): string | null => {
+    const parentPathOf = (p: Project): string | null => {
       if (!p.parent_id) return null
       const parent = projectMap.get(p.parent_id)
       if (!parent) return null
@@ -188,24 +165,55 @@ export default function DashboardPage() {
       return parent.name
     }
 
-    const sortedMembers = sortMembers(members)
-    const result = new Map<string, Map<string, CellInfo>>()
+    // 진행 가능한 leaf 프로젝트 (완료/보류 제외, 자식 없는 것만)
+    const activeProjects = projects.filter(p => p.status !== '완료' && p.status !== '보류')
+    const parentIds = new Set(projects.filter(p => p.parent_id).map(p => p.parent_id))
+    const leafProjects = activeProjects.filter(p => !parentIds.has(p.id))
 
-    for (const member of sortedMembers) {
-      const memMap = new Map<string, CellInfo>()
-      for (const w of weeks) {
-        const list: CellInfo['projects'] = []
-        for (const p of leafProjects) {
-          if (!isAssigned(p, member)) continue
-          if (!overlapsWeek(p, w.start, w.end)) continue
-          list.push({ id: p.id, name: p.name, parentName: parentPath(p) })
-        }
-        memMap.set(w.key, { count: list.length, projects: list })
+    // 이번주 작업 있는 DR (dr_progress.progress_date 기준)
+    const periodStart = format(weekRange.start, 'yyyy-MM-dd')
+    const periodEnd   = format(weekRange.end,   'yyyy-MM-dd')
+    const drInWeek = new Set(
+      drProgress
+        .filter(dp => dp.progress_date >= periodStart && dp.progress_date <= periodEnd)
+        .map(dp => dp.dr_id)
+    )
+    const activeDr = drItems.filter(d =>
+      d.status !== '완료' && d.status !== '보류' && drInWeek.has(d.id)
+    )
+
+    const sortedMembers = sortMembers(members)
+    const list: MemberWorkload[] = sortedMembers.map(m => {
+      const projItems = leafProjects
+        .filter(p => isAssigned(p, m) && overlapsWeek(p, weekRange.start, weekRange.end))
+        .map(p => ({ id: p.id, name: p.name, parentName: parentPathOf(p) }))
+
+      const drForMember = activeDr
+        .filter(d => normalizeAssignees(d.assignees).some(x => x === m.id || x === m.name))
+        .map(d => ({ id: d.id, name: d.name }))
+
+      return {
+        member: m,
+        projects: projItems,
+        drs: drForMember,
+        total: projItems.length + drForMember.length,
       }
-      result.set(member.id, memMap)
+    })
+
+    const withLoad = list.filter(r => r.total > 0).sort((a, b) => b.total - a.total)
+    const empty    = list.filter(r => r.total === 0)
+
+    // 임계치별 카운트
+    const counts = { overload: 0, red: 0, yellow: 0, green: 0, empty: empty.length }
+    for (const r of withLoad) {
+      if (r.total > TH_RED)         counts.overload++
+      else if (r.total > TH_YELLOW) counts.red++
+      else if (r.total > TH_GREEN)  counts.yellow++
+      else                          counts.green++
     }
-    return { sortedMembers, matrix: result }
-  }, [projects, members, weeks])
+
+    return { withLoad, empty, counts }
+  }, [projects, members, drItems, drProgress, weekRange])
 
   /* ── 지연 감지 ───────────────────────────────── */
   const delayed = useMemo(() => {
@@ -262,23 +270,36 @@ export default function DashboardPage() {
         parentPath={parentPath}
       />
 
-      {/* 멤버 워크로드 히트맵 */}
+      {/* 이번주 멤버별 워크로드 — 부하 랭킹 */}
       <section className="bg-white border border-gray-200 rounded-xl p-5 mb-6">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-3">
           <div>
-            <h2 className="text-base font-semibold text-gray-900">멤버별 워크로드</h2>
+            <h2 className="text-base font-semibold text-gray-900">이번주 멤버별 워크로드</h2>
             <p className="text-xs text-gray-500 mt-0.5">
-              향후 {NUM_WEEKS}주간 동시에 진행되는 프로젝트 수
+              {format(weekRange.start, 'M/d(EEE)', { locale: ko })} ~ {format(weekRange.end, 'M/d(EEE)', { locale: ko })}
+              <span className="text-gray-300"> · </span>
+              누가 일이 몰려있나
             </p>
           </div>
-          {/* 범례 */}
           <div className="flex items-center gap-3 text-xs text-gray-600">
-            <LegendDot color="#f9fafb" border="#e5e7eb" label="0" />
-            <LegendDot color="#bbf7d0" border="#86efac" label={`1~${TH_GREEN}`} />
-            <LegendDot color="#fef08a" border="#fde047" label={`${TH_GREEN + 1}~${TH_YELLOW}`} />
-            <LegendDot color="#fecaca" border="#fca5a5" label={`${TH_YELLOW + 1}~${TH_RED}`} />
-            <LegendDot color="#dc2626" border="#b91c1c" label={`${TH_RED + 1}+`} textColor="#fff" />
+            <span className="inline-flex items-center gap-1.5">
+              <span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#1f2937' }} />
+              프로젝트
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#cbd5e1' }} />
+              DR
+            </span>
           </div>
+        </div>
+
+        {/* 임계치별 요약 */}
+        <div className="flex items-center gap-2 mb-4 flex-wrap">
+          <SummaryChip bg="#7f1d1d" fg="#ffffff" label={`과부하 ${TH_RED + 1}+`}            value={workload.counts.overload} />
+          <SummaryChip bg="#fecaca" fg="#991b1b" label={`주의 ${TH_YELLOW + 1}~${TH_RED}`}    value={workload.counts.red}      />
+          <SummaryChip bg="#fef08a" fg="#854d0e" label={`노란 ${TH_GREEN + 1}~${TH_YELLOW}`}  value={workload.counts.yellow}   />
+          <SummaryChip bg="#bbf7d0" fg="#166534" label={`정상 1~${TH_GREEN}`}                value={workload.counts.green}    />
+          <SummaryChip bg="#f3f4f6" fg="#6b7280" label="비어있음"                            value={workload.counts.empty}    />
         </div>
 
         {loading ? (
@@ -286,100 +307,152 @@ export default function DashboardPage() {
             <RefreshCw size={20} className="animate-spin mr-2" />
             불러오는 중...
           </div>
-        ) : matrix.sortedMembers.length === 0 ? (
+        ) : workload.withLoad.length === 0 && workload.empty.length === 0 ? (
           <div className="text-sm text-gray-400 text-center py-10">활성 멤버가 없습니다.</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-sm">
-              <thead>
-                <tr>
-                  <th className="sticky left-0 bg-white text-left px-3 py-2 border-b border-gray-200 font-medium text-gray-700 z-10 min-w-[180px]">
-                    멤버
-                  </th>
-                  {weeks.map(w => (
-                    <th
-                      key={w.key}
-                      className={`px-2 py-2 border-b border-gray-200 font-medium text-center text-xs ${
-                        w.isCurrent ? 'bg-blue-50 text-blue-700' : 'text-gray-600'
-                      }`}
-                      style={{ minWidth: 92 }}
-                    >
-                      <div>{w.label}</div>
-                      <div className="text-[10px] text-gray-400 font-normal">{w.sublabel}</div>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {matrix.sortedMembers.map(m => {
-                  const memMap = matrix.matrix.get(m.id)
-                  return (
-                    <tr key={m.id} className="hover:bg-gray-50">
-                      <td className="sticky left-0 bg-white px-3 py-2 border-b border-gray-100 z-10">
-                        <div className="flex items-center gap-2">
-                          <DeptBadge dept={m.department} />
-                          <span className="font-medium text-gray-900">{m.name}</span>
-                          {m.is_leader && (
-                            <span className="text-[10px] text-amber-700 bg-amber-100 border border-amber-200 px-1.5 py-0.5 rounded">
-                              리더
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      {weeks.map(w => {
-                        const cell = memMap?.get(w.key) ?? { count: 0, projects: [] }
-                        const s = getCellStyle(cell.count)
-                        return (
-                          <td
-                            key={w.key}
-                            className="px-2 py-2 border-b border-gray-100 text-center"
-                          >
-                            <div
-                              className="group relative inline-flex items-center justify-center rounded-md font-semibold text-sm cursor-default"
-                              style={{
-                                width: 56,
-                                height: 32,
-                                backgroundColor: s.bg,
-                                color: s.text,
-                                border: `1px solid ${s.border}`,
-                              }}
-                            >
-                              {cell.count}
-                              {cell.count > 0 && (
-                                <div
-                                  className="absolute z-20 hidden group-hover:block top-full mt-1 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs rounded-lg px-3 py-2 shadow-lg whitespace-nowrap text-left"
-                                  style={{ minWidth: 220 }}
-                                >
-                                  <div className="font-semibold mb-1 border-b border-gray-700 pb-1">
-                                    {cell.count}개 프로젝트
-                                  </div>
-                                  {cell.projects.slice(0, 8).map(pr => (
-                                    <div key={pr.id} className="py-0.5">
-                                      {pr.parentName && (
-                                        <span className="text-gray-400">{pr.parentName} &gt; </span>
-                                      )}
-                                      {pr.name}
-                                    </div>
-                                  ))}
-                                  {cell.projects.length > 8 && (
-                                    <div className="text-gray-400 mt-1">
-                                      외 {cell.projects.length - 8}개 ...
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          </td>
-                        )
-                      })}
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+          <div className="space-y-1">
+            {workload.withLoad.length === 0 && (
+              <div className="text-sm text-gray-400 text-center py-6">
+                이번주 배정된 작업이 없습니다.
+              </div>
+            )}
+            {workload.withLoad.map(row => (
+              <WorkloadRow
+                key={row.member.id}
+                row={row}
+                maxLoad={Math.max(8, workload.withLoad[0]?.total ?? 0)}
+              />
+            ))}
+            {workload.empty.length > 0 && (
+              <EmptyMembersBlock empties={workload.empty} />
+            )}
           </div>
         )}
       </section>
+    </div>
+  )
+}
+
+/* ── 요약 칩 ──────────────────────────────────── */
+function SummaryChip({ bg, fg, label, value }: { bg: string; fg: string; label: string; value: number }) {
+  return (
+    <div
+      className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs"
+      style={{ background: bg, color: fg }}
+    >
+      <span className="font-bold">{value}</span>
+      <span className="opacity-80">{label}</span>
+    </div>
+  )
+}
+
+/* ── 워크로드 행 (멤버별 stacked bar + 펼침) ─── */
+function WorkloadRow({ row, maxLoad }: { row: MemberWorkload; maxLoad: number }) {
+  const [open, setOpen] = useState(false)
+  const colors = getBarColors(row.total)
+  const projWidth = (row.projects.length / maxLoad) * 100
+  const drWidth   = (row.drs.length     / maxLoad) * 100
+
+  return (
+    <div className="border border-gray-100 rounded-lg overflow-hidden hover:border-gray-200 transition-colors">
+      <div
+        className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 cursor-pointer select-none"
+        onClick={() => setOpen(o => !o)}
+      >
+        {/* 펼침 인디케이터 */}
+        <span className="text-gray-400 flex-shrink-0">
+          {open ? <ChevronDown size={14} /> : <ChevronRightIcon size={14} />}
+        </span>
+
+        {/* 부서 + 이름 */}
+        <div className="flex items-center gap-2 w-44 flex-shrink-0">
+          <DeptBadge dept={row.member.department} />
+          <span className="text-sm font-medium text-gray-800 truncate">{row.member.name}</span>
+          {row.member.is_leader && (
+            <span className="text-[10px] text-amber-700 bg-amber-100 border border-amber-200 px-1 py-0.5 rounded flex-shrink-0">
+              리더
+            </span>
+          )}
+        </div>
+
+        {/* stacked bar */}
+        <div className="flex-1 h-5 bg-gray-100 rounded-md overflow-hidden flex">
+          {row.projects.length > 0 && (
+            <div style={{ width: `${projWidth}%`, background: colors.p }} title={`프로젝트 ${row.projects.length}건`} />
+          )}
+          {row.drs.length > 0 && (
+            <div style={{ width: `${drWidth}%`, background: colors.dr }} title={`DR ${row.drs.length}건`} />
+          )}
+        </div>
+
+        {/* 숫자 */}
+        <div className="text-xs flex items-center gap-1 w-36 justify-end flex-shrink-0">
+          <span className="font-semibold" style={{ color: colors.p }}>P {row.projects.length}</span>
+          <span className="text-gray-300">·</span>
+          <span className="text-gray-600">DR {row.drs.length}</span>
+          <span className="text-gray-300">·</span>
+          <span className="font-bold text-gray-900 tabular-nums">{row.total}</span>
+        </div>
+      </div>
+
+      {/* 펼침 영역 — 항목 칩 */}
+      {open && (row.projects.length > 0 || row.drs.length > 0) && (
+        <div className="px-3 pb-3 pt-2 bg-gray-50/60 border-t border-gray-100">
+          <div className="flex flex-wrap gap-1.5">
+            {row.projects.map(p => (
+              <Link
+                key={p.id}
+                href={`/calendar?task=${p.id}`}
+                className="text-xs bg-white border border-gray-200 rounded px-2 py-1 hover:border-blue-300 hover:bg-blue-50 transition-colors text-gray-700"
+                title={p.parentName ? `${p.parentName} > ${p.name}` : p.name}
+              >
+                {p.parentName && <span className="text-gray-400">{p.parentName} &gt; </span>}
+                {p.name}
+              </Link>
+            ))}
+            {row.drs.map(d => (
+              <Link
+                key={d.id}
+                href={`/calendar?task=${d.id}&tab=dr`}
+                className="text-xs bg-red-50 border border-red-200 text-red-700 rounded px-2 py-1 hover:bg-red-100 transition-colors flex items-center gap-1"
+              >
+                <span className="text-[10px] font-bold">DR</span>
+                {d.name}
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ── 작업 없는 멤버 블록 ────────────────────── */
+function EmptyMembersBlock({ empties }: { empties: MemberWorkload[] }) {
+  const [open, setOpen] = useState(false)
+  if (empties.length === 0) return null
+  return (
+    <div className="border-t border-dashed border-gray-200 pt-3 mt-3">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="text-xs text-gray-500 hover:text-gray-700 cursor-pointer flex items-center gap-1"
+      >
+        {open ? <ChevronDown size={12} /> : <ChevronRightIcon size={12} />}
+        작업 없음 ({empties.length}명)
+      </button>
+      {open && (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {empties.map(({ member }) => (
+            <span
+              key={member.id}
+              className="inline-flex items-center gap-1.5 text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded px-2 py-1"
+            >
+              <DeptBadge dept={member.department} />
+              {member.name}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -516,17 +589,3 @@ function DelayPanel({
   )
 }
 
-/* ── 작은 컴포넌트 ───────────────────────────── */
-function LegendDot({
-  color, border, label, textColor = '#374151',
-}: { color: string; border: string; label: string; textColor?: string }) {
-  return (
-    <div className="flex items-center gap-1.5">
-      <span
-        className="inline-block w-4 h-4 rounded"
-        style={{ backgroundColor: color, border: `1px solid ${border}` }}
-      />
-      <span style={{ color: textColor === '#fff' ? '#374151' : textColor }}>{label}</span>
-    </div>
-  )
-}
