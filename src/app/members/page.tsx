@@ -639,6 +639,30 @@ export default function MembersPage() {
         ancestorChain: chain.join(' → '),
       })
     }
+    // 전체 프로젝트 assignees 통계
+    let nonEmpty = 0, empty = 0, nullish = 0
+    const nonEmptySamples: string[] = []
+    for (const p of projects) {
+      const a = p.assignees
+      if (a == null) { nullish++; continue }
+      if (Array.isArray(a)) {
+        if (a.length === 0) empty++
+        else {
+          nonEmpty++
+          if (nonEmptySamples.length < 5) nonEmptySamples.push(`${p.name}: ${JSON.stringify(a)}`)
+        }
+      } else if (typeof a === 'string') {
+        // 문자열로 저장된 경우 (JSON 파싱 필요)
+        try {
+          const parsed = JSON.parse(a)
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            nonEmpty++
+            if (nonEmptySamples.length < 5) nonEmptySamples.push(`${p.name}: ${a}`)
+          } else empty++
+        } catch { empty++ }
+      } else { empty++ }
+    }
+
     console.group('[Members 디버그] 매칭 추적')
     console.log('기간:', periodStart, '~', periodEnd)
     console.log('이 기간 진행기록 건수:', inRange.length)
@@ -646,7 +670,15 @@ export default function MembersPage() {
     console.log('활성 멤버 수:', activeMembers.length)
     console.log('활성 멤버 ID 샘플:', Array.from(activeMemberIds).slice(0, 3))
     console.log('활성 멤버 이름 샘플:', Array.from(activeMemberNames).slice(0, 3))
-    console.log('진행기록이 있는 프로젝트 샘플(최대 10개):')
+    console.log('───── 전체 프로젝트 assignees 통계 ─────')
+    console.log(`총 ${projects.length}건 중: 채워짐 ${nonEmpty} / 빈배열 ${empty} / null ${nullish}`)
+    if (nonEmptySamples.length > 0) {
+      console.log('채워진 프로젝트 샘플:')
+      nonEmptySamples.forEach(s => console.log(' •', s))
+    } else {
+      console.log('⚠️ 모든 프로젝트의 assignees가 비어있음 — 일괄 누락 가능성')
+    }
+    console.log('───── 진행기록이 있는 프로젝트 샘플(최대 10개) ─────')
     samples.forEach(s => console.log(' •', s.name, '→', s.ancestorChain))
     console.groupEnd()
   }, [loading, periods, projects, progress, activeMembers])
