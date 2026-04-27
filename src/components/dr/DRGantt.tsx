@@ -1009,38 +1009,3 @@ export function DRGantt({
     </div>
   )
 }
-actionMenu
-        const top  = Math.min(rect.bottom + 4, window.innerHeight - 100)
-        const left = Math.max(rect.left - 100, 8)
-        return (
-          <>
-            <div className="fixed inset-0 z-[9998]" onClick={() => setActionMenu(null)} />
-            <div
-              className="fixed z-[9999] bg-white border border-gray-200 rounded-xl shadow-xl py-1 w-36"
-              style={{ top, left }}
-              onClick={e => e.stopPropagation()}
-            >
-              <button
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer"
-                onClick={() => {
-                  setActionMenu(null)
-                  startEdit(item, 'name')
-                }}
-              >
-                <Pencil size={13} className="text-gray-400" />
-                이름 수정
-              </button>
-              <button
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 cursor-pointer"
-                onClick={() => handleDelete(item.id)}
-              >
-                <Trash2 size={13} />
-                삭제
-              </button>
-            </div>
-          </>
-        )
-      })()}
-    </div>
-  )
-}
