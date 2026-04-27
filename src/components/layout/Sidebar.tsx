@@ -10,8 +10,8 @@ import { Project } from '@/lib/types'
 
 const navItems = [
   { href: '/calendar',  label: '캘린더',          icon: Calendar       },
-  { href: '/timeline',  label: '타임라인',         icon: BarChart2      },
   { href: '/members',   label: '멤버별 작업 현황', icon: Users          },
+  { href: '/timeline',  label: '타임라인',         icon: BarChart2      },
   { href: '/archive',   label: '완료 아카이브',    icon: CheckSquare    },
   { href: '/backlog',   label: 'Backlog',          icon: ClipboardList  },
   { href: '/uxi-lab',   label: 'UXI LAB',          icon: Lightbulb      },

@@ -140,6 +140,16 @@ export interface ImprovementRequest {
   updated_at: string
 }
 
+export interface ImprovementComment {
+  id: string
+  request_id: string
+  user_email: string
+  user_name: string | null
+  content: string
+  created_at: string
+  updated_at: string
+}
+
 // ── 프로젝트 변경 이력 ───────────────────────────────────────
 export type HistoryAction = 'create' | 'update' | 'delete'
 export type HistoryField = 'status' | 'start_date' | 'end_date' | 'lts_date' | 'progress'

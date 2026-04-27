@@ -2,10 +2,10 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { ImprovementRequest } from '@/lib/types'
+import { ImprovementRequest, ImprovementComment } from '@/lib/types'
 import {
   RefreshCw, Send, ImagePlus, Link as LinkIcon, X, Trash2, ExternalLink,
-  MessageSquarePlus,
+  MessageSquarePlus, MessageSquare,
 } from 'lucide-react'
 
 const BUCKET = 'improvement-images'
@@ -51,6 +51,8 @@ export default function FeedbackPage() {
     })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  const [comments, setComments] = useState<Record<string, ImprovementComment[]>>({})
+
   const fetchData = useCallback(async () => {
     setLoading(true)
     setFetchError(null)
@@ -62,8 +64,30 @@ export default function FeedbackPage() {
       if (error) {
         setFetchError(`${error.message} (code: ${error.code})`)
         setItems([])
+        setComments({})
       } else {
-        setItems((data ?? []) as ImprovementRequest[])
+        const requests = (data ?? []) as ImprovementRequest[]
+        setItems(requests)
+
+        if (requests.length > 0) {
+          const ids = requests.map(r => r.id)
+          const { data: cData, error: cErr } = await supabase
+            .from('improvement_comments')
+            .select('*')
+            .in('request_id', ids)
+            .order('created_at', { ascending: true })
+          if (!cErr) {
+            const grouped: Record<string, ImprovementComment[]> = {}
+            ;(cData ?? []).forEach(c => {
+              const key = (c as ImprovementComment).request_id
+              if (!grouped[key]) grouped[key] = []
+              grouped[key].push(c as ImprovementComment)
+            })
+            setComments(grouped)
+          }
+        } else {
+          setComments({})
+        }
       }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e)
@@ -74,6 +98,39 @@ export default function FeedbackPage() {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { fetchData() }, [fetchData])
+
+  /* 코멘트 추가 */
+  async function addComment(requestId: string, text: string) {
+    const trimmed = text.trim()
+    if (!trimmed || !myEmail) return
+    const { data, error } = await supabase
+      .from('improvement_comments')
+      .insert({
+        request_id: requestId,
+        user_email: myEmail,
+        user_name: myName,
+        content: trimmed,
+      })
+      .select('*')
+      .single()
+    if (error || !data) return
+    setComments(prev => ({
+      ...prev,
+      [requestId]: [...(prev[requestId] ?? []), data as ImprovementComment],
+    }))
+  }
+
+  /* 코멘트 삭제 (본인 또는 관리자) */
+  async function deleteComment(c: ImprovementComment) {
+    const canDelete = c.user_email === myEmail || isAdmin
+    if (!canDelete) return
+    if (!confirm('이 코멘트를 삭제할까요?')) return
+    await supabase.from('improvement_comments').delete().eq('id', c.id)
+    setComments(prev => ({
+      ...prev,
+      [c.request_id]: (prev[c.request_id] ?? []).filter(x => x.id !== c.id),
+    }))
+  }
 
   /* 이미지 파일 선택 */
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -330,7 +387,8 @@ export default function FeedbackPage() {
           </div>
           <div className="text-gray-500 text-xs text-center mt-1">
             Supabase SQL Editor에서{' '}
-            <code className="bg-gray-100 px-1 py-0.5 rounded">migration_improvement_requests.sql</code>을 먼저 실행하세요
+            <code className="bg-gray-100 px-1 py-0.5 rounded">migration_improvement_requests.sql</code>과{' '}
+            <code className="bg-gray-100 px-1 py-0.5 rounded">migration_improvement_comments.sql</code>을 먼저 실행하세요
           </div>
         </div>
       ) : loading ? (
@@ -413,11 +471,121 @@ export default function FeedbackPage() {
                     ))}
                   </div>
                 )}
+
+                <CommentSection
+                  requestId={item.id}
+                  comments={comments[item.id] ?? []}
+                  myEmail={myEmail}
+                  myName={myName}
+                  isAdmin={isAdmin}
+                  onAdd={addComment}
+                  onDelete={deleteComment}
+                />
               </div>
             )
           })}
         </div>
       )}
+    </div>
+  )
+}
+
+/* ── 코멘트 영역 ────────────────────────────────── */
+function CommentSection({
+  requestId, comments, myEmail, myName, isAdmin, onAdd, onDelete,
+}: {
+  requestId: string
+  comments: ImprovementComment[]
+  myEmail: string | null
+  myName: string | null
+  isAdmin: boolean
+  onAdd: (requestId: string, text: string) => Promise<void>
+  onDelete: (c: ImprovementComment) => Promise<void>
+}) {
+  const [text, setText] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  async function submit() {
+    if (!text.trim() || submitting) return
+    setSubmitting(true)
+    try {
+      await onAdd(requestId, text)
+      setText('')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="mt-4 pt-3 border-t border-gray-100">
+      {comments.length > 0 && (
+        <div className="space-y-2 mb-3">
+          {comments.map(c => {
+            const canDelete = c.user_email === myEmail || isAdmin
+            return (
+              <div key={c.id} className="flex items-start gap-2 group">
+                <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-[10px] font-bold text-gray-700 flex-shrink-0 mt-0.5">
+                  {(c.user_name ?? c.user_email)[0]?.toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="bg-gray-50 rounded-lg px-3 py-1.5">
+                    <div className="flex items-center justify-between gap-2 mb-0.5">
+                      <p className="text-xs font-medium text-gray-700">
+                        {c.user_name ?? c.user_email}
+                      </p>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] text-gray-400">{fmtDateTime(c.created_at)}</span>
+                        {canDelete && (
+                          <button
+                            onClick={() => onDelete(c)}
+                            className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition-opacity cursor-pointer"
+                            title="삭제"
+                          >
+                            <Trash2 size={11} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <p className="text-sm text-gray-800 whitespace-pre-wrap break-words">{c.content}</p>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* 코멘트 입력 */}
+      <div className="flex items-center gap-2">
+        <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-[10px] font-bold text-blue-700 flex-shrink-0">
+          {myName?.[0]?.toUpperCase() ?? '?'}
+        </div>
+        <div className="flex-1 flex items-center gap-2 border border-gray-200 rounded-full px-3 py-1 focus-within:ring-2 focus-within:ring-blue-300 focus-within:border-blue-300">
+          <MessageSquare size={12} className="text-gray-400 flex-shrink-0" />
+          <input
+            type="text"
+            value={text}
+            onChange={e => setText(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                submit()
+              }
+            }}
+            placeholder="코멘트를 남겨주세요..."
+            className="flex-1 text-sm focus:outline-none bg-transparent"
+          />
+          <button
+            type="button"
+            onClick={submit}
+            disabled={!text.trim() || submitting}
+            className="text-blue-600 hover:text-blue-700 disabled:text-gray-300 disabled:cursor-not-allowed cursor-pointer"
+            title="등록"
+          >
+            <Send size={13} />
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
