@@ -1374,6 +1374,17 @@ export function WeeklyGantt({
         )
       })()}
 
+      {/* ── 스크롤 컨테이너: sticky zone + body 를 함께 감싸 vertical scroll context 제공 ── */}
+      <div
+        style={{
+          maxHeight: 'calc(100vh - 180px)',
+          overflowY: 'auto',
+          overflowX: 'visible',
+          scrollbarWidth: 'none',
+          msOverflowStyle: 'none',
+        } as React.CSSProperties}
+      >
+
       {/* ── STICKY ZONE ─────────────────────────── */}
       <div className="sticky top-0 z-50 bg-gray-50">
         <div className="flex items-center gap-2 py-3 bg-white border-b border-gray-100">
@@ -1906,6 +1917,9 @@ export function WeeklyGantt({
           </table>
         </div>
       </div>
+
+      </div>
+      {/* ── 스크롤 컨테이너 끝 ── */}
     </div>
   )
 }
