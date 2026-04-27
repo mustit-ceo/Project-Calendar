@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Project, TeamMember, DrItem, DrProgress } from '@/lib/types'
+import { Project, TeamMember, TaskProgress, DrItem, DrProgress } from '@/lib/types'
 import { format, addDays, getDay } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import { RefreshCw, AlertTriangle, Clock, CalendarX, Pause, ChevronDown, ChevronRight as ChevronRightIcon } from 'lucide-react'
@@ -39,13 +39,6 @@ function endOfDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59)
 }
 
-function parseYMD(s: string | null): Date | null {
-  if (!s) return null
-  const [y, m, d] = s.split('-').map(Number)
-  if (!y || !m || !d) return null
-  return new Date(y, m - 1, d)
-}
-
 function normalizeAssignees(raw: unknown): string[] {
   if (Array.isArray(raw)) return raw as string[]
   if (typeof raw === 'string') {
@@ -55,16 +48,6 @@ function normalizeAssignees(raw: unknown): string[] {
     } catch { return [] }
   }
   return []
-}
-
-/** 주 범위 [ws, we]와 프로젝트 기간이 겹치는가? */
-function overlapsWeek(p: Project, weekStart: Date, weekEnd: Date): boolean {
-  const s = parseYMD(p.start_date)
-  const e = parseYMD(p.lts_date) ?? parseYMD(p.end_date)
-  if (!s && !e) return false
-  const start = s ?? e!
-  const end = e ?? s!
-  return start <= weekEnd && end >= weekStart
 }
 
 /** 임계치별 막대 색상 (프로젝트 짙은색, DR 옅은색) */
@@ -90,6 +73,7 @@ export default function DashboardPage() {
   const supabase = createClient()
   const [projects,  setProjects]  = useState<Project[]>([])
   const [members,   setMembers]   = useState<TeamMember[]>([])
+  const [progress,  setProgress]  = useState<TaskProgress[]>([])
   const [drItems,   setDrItems]   = useState<DrItem[]>([])
   const [drProgress, setDrProgress] = useState<DrProgress[]>([])
   const [loading,   setLoading]   = useState(true)
@@ -121,16 +105,19 @@ export default function DashboardPage() {
     const [
       { data: projData },
       { data: memData },
+      { data: progData },
       { data: drData },
       { data: drProgData },
     ] = await Promise.all([
       supabase.from('projects').select('*').eq('is_archived', false),
       supabase.from('team_members').select('*').eq('is_active', true),
+      supabase.from('task_progress').select('*'),
       supabase.from('dr_items').select('*').eq('is_archived', false),
       supabase.from('dr_progress').select('*'),
     ])
     setProjects((projData ?? []) as Project[])
     setMembers((memData ?? []) as TeamMember[])
+    setProgress((progData ?? []) as TaskProgress[])
     setDrItems((drData ?? []) as DrItem[])
     setDrProgress((drProgData ?? []) as DrProgress[])
     setLoading(false)
@@ -165,14 +152,26 @@ export default function DashboardPage() {
       return parent.name
     }
 
-    // 진행 가능한 leaf 프로젝트 (완료/보류 제외, 자식 없는 것만)
-    const activeProjects = projects.filter(p => p.status !== '완료' && p.status !== '보류')
-    const parentIds = new Set(projects.filter(p => p.parent_id).map(p => p.parent_id))
-    const leafProjects = activeProjects.filter(p => !parentIds.has(p.id))
-
-    // 이번주 작업 있는 DR (dr_progress.progress_date 기준)
+    // 이번주 범위 (YYYY-MM-DD)
     const periodStart = format(weekRange.start, 'yyyy-MM-dd')
     const periodEnd   = format(weekRange.end,   'yyyy-MM-dd')
+
+    // 이번주 task_progress가 있는 프로젝트
+    const projectIdsInWeek = new Set(
+      progress
+        .filter(pr => pr.progress_date >= periodStart && pr.progress_date <= periodEnd)
+        .map(pr => pr.project_id)
+    )
+
+    // 이번주 작업 있는 leaf 프로젝트 (완료/보류 제외, 자식 없는 것만)
+    const parentIds = new Set(projects.filter(p => p.parent_id).map(p => p.parent_id))
+    const leafProjectsInWeek = projects.filter(p =>
+      !parentIds.has(p.id) &&
+      projectIdsInWeek.has(p.id) &&
+      p.status !== '완료' && p.status !== '보류'
+    )
+
+    // 이번주 작업 있는 DR (dr_progress.progress_date 기준)
     const drInWeek = new Set(
       drProgress
         .filter(dp => dp.progress_date >= periodStart && dp.progress_date <= periodEnd)
@@ -184,8 +183,8 @@ export default function DashboardPage() {
 
     const sortedMembers = sortMembers(members)
     const list: MemberWorkload[] = sortedMembers.map(m => {
-      const projItems = leafProjects
-        .filter(p => isAssigned(p, m) && overlapsWeek(p, weekRange.start, weekRange.end))
+      const projItems = leafProjectsInWeek
+        .filter(p => isAssigned(p, m))
         .map(p => ({ id: p.id, name: p.name, parentName: parentPathOf(p) }))
 
       const drForMember = activeDr
@@ -213,7 +212,7 @@ export default function DashboardPage() {
     }
 
     return { withLoad, empty, counts }
-  }, [projects, members, drItems, drProgress, weekRange])
+  }, [projects, members, progress, drItems, drProgress, weekRange])
 
   /* ── 지연 감지 ───────────────────────────────── */
   const delayed = useMemo(() => {
