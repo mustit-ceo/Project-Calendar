@@ -27,10 +27,11 @@ function classifyLoad(count: number, t: { g: number; y: number; r: number }): Lo
   return 'overload'
 }
 
+// 임계치 요약 칩 배경색과 동일 (범례 일치)
 const BAND_COLOR: Record<LoadBand, string> = {
-  green:    '#16a34a',
-  yellow:   '#ca8a04',
-  red:      '#dc2626',
+  green:    '#bbf7d0',
+  yellow:   '#fef08a',
+  red:      '#fecaca',
   overload: '#7f1d1d',
 }
 
