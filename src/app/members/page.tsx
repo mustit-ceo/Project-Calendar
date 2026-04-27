@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Project, TaskProgress, TeamMember, Department } from '@/lib/types'
+import { Project, TaskProgress, TeamMember, Department, DrItem, DrProgress } from '@/lib/types'
 import { useRouter } from 'next/navigation'
 import {
   format, addDays, addWeeks, addMonths,
@@ -13,7 +13,7 @@ import {
   RefreshCw, ChevronLeft, ChevronRight,
   Settings, Plus, X, Check, Pencil, Trash2,
 } from 'lucide-react'
-import { DEPARTMENTS, DR_CATEGORIES } from '@/lib/utils'
+import { DEPARTMENTS } from '@/lib/utils'
 import { DeptBadge } from '@/components/ui/DeptBadge'
 
 /* ── 타입 ──────────────────────────────────────── */
@@ -155,33 +155,56 @@ function generatePeriods(mode: ViewMode, offset: number): Period[] {
   }))
 }
 
-/* ── 해당 기간 프로젝트 계산 ────────────────────── */
+/* ── assignees 정규화: 배열/문자열(JSON) 모두 처리 ── */
+function normalizeAssignees(raw: unknown): string[] {
+  if (Array.isArray(raw)) return raw as string[]
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw)
+      return Array.isArray(parsed) ? parsed as string[] : []
+    } catch { return [] }
+  }
+  return []
+}
+
+/* ── 해당 기간 작업 계산 (프로젝트 + DR) ───────── */
+type WorkChip = { id: string; name: string; parentName: string | null; kind: 'project' | 'dr' }
+
 function getProjectsForMember(
   member:      TeamMember,
   period:      Period,
   allProjects: Project[],
   progress:    TaskProgress[],
-): { project: Project; parentName: string | null; kind: 'project' | 'dr' }[] {
-  // 1. 기간 내 task_progress 가 있는 project_id 집합
+  drItems:     DrItem[],
+  drProgress:  DrProgress[],
+): WorkChip[] {
   const periodStart = format(period.start, 'yyyy-MM-dd')
   const periodEnd   = format(period.end,   'yyyy-MM-dd')
 
-  const progressIds = new Set(
+  /* ── 프로젝트 ── */
+  const projectIdsInPeriod = new Set(
     progress
       .filter(pr => pr.progress_date >= periodStart && pr.progress_date <= periodEnd)
       .map(pr => pr.project_id)
   )
 
-  // 2. 멤버가 담당자이고 해당 기간 progress 가 있는 태스크
   const projectMap = new Map(allProjects.map(p => [p.id, p]))
 
-  return allProjects
-    .filter(p => {
-      const isAssigned =
-        Array.isArray(p.assignees) &&
-        (p.assignees.includes(member.id) || p.assignees.includes(member.name))
-      return isAssigned && progressIds.has(p.id)
-    })
+  // 자기 자신 또는 조상 체인 중 하나라도 멤버가 담당자인지 확인
+  const isAssignedSelfOrAncestor = (p: Project): boolean => {
+    let cur: Project | undefined = p
+    let depth = 0
+    while (cur && depth < 10) {
+      const ids = normalizeAssignees(cur.assignees)
+      if (ids.includes(member.id) || ids.includes(member.name)) return true
+      cur = cur.parent_id ? projectMap.get(cur.parent_id) : undefined
+      depth++
+    }
+    return false
+  }
+
+  const projectResults: WorkChip[] = allProjects
+    .filter(p => projectIdsInPeriod.has(p.id) && isAssignedSelfOrAncestor(p))
     .map(p => {
       // 부모 경로 조합 (최대 grandparent > parent)
       let parentName: string | null = null
@@ -196,9 +219,25 @@ function getProjectsForMember(
           }
         }
       }
-      const kind: 'project' | 'dr' = DR_CATEGORIES.includes(p.category) ? 'dr' : 'project'
-      return { project: p, parentName, kind }
+      return { id: p.id, name: p.name, parentName, kind: 'project' as const }
     })
+
+  /* ── DR ── */
+  const drIdsInPeriod = new Set(
+    drProgress
+      .filter(dp => dp.progress_date >= periodStart && dp.progress_date <= periodEnd)
+      .map(dp => dp.dr_id)
+  )
+
+  const drResults: WorkChip[] = drItems
+    .filter(it => {
+      if (!drIdsInPeriod.has(it.id)) return false
+      const ids = normalizeAssignees(it.assignees)
+      return ids.includes(member.id) || ids.includes(member.name)
+    })
+    .map(it => ({ id: it.id, name: it.name, parentName: null, kind: 'dr' as const }))
+
+  return [...projectResults, ...drResults]
 }
 
 /* ── MemberAvatar ──────────────────────────────── */
@@ -223,16 +262,16 @@ function MemberAvatar({ member, size = 36 }: { member: TeamMember; size?: number
 
 /* ── ProjectChip ───────────────────────────────── */
 function ProjectChip({
-  project, parentName, kind,
+  id, name, parentName, kind,
 }: {
-  project: Project; parentName?: string | null; kind?: 'project' | 'dr'
+  id: string; name: string; parentName?: string | null; kind?: 'project' | 'dr'
 }) {
   const router = useRouter()
   const isDR = kind === 'dr'
   return (
     <div
       className="flex flex-col px-2 py-1 mb-1 bg-white border border-gray-100 rounded-lg shadow-sm min-w-0 cursor-pointer hover:border-blue-300 hover:bg-blue-50/40 transition-colors"
-      onClick={() => router.push(`/calendar?task=${project.id}${isDR ? '&tab=dr' : ''}`)}
+      onClick={() => router.push(`/calendar?task=${id}${isDR ? '&tab=dr' : ''}`)}
       title="캘린더에서 보기"
     >
       {parentName && (
@@ -247,8 +286,8 @@ function ProjectChip({
             DR
           </span>
         )}
-        <span className="text-[13px] truncate leading-tight font-medium text-gray-700" title={project.name}>
-          {project.name}
+        <span className="text-[13px] truncate leading-tight font-medium text-gray-700" title={name}>
+          {name}
         </span>
       </div>
     </div>
@@ -511,6 +550,8 @@ export default function MembersPage() {
   const [members,  setMembers]  = useState<TeamMember[]>([])
   const [projects, setProjects] = useState<Project[]>([])
   const [progress, setProgress] = useState<TaskProgress[]>([])
+  const [drItems,    setDrItems]    = useState<DrItem[]>([])
+  const [drProgress, setDrProgress] = useState<DrProgress[]>([])
   const [loading,    setLoading]    = useState(true)
   const [fetchError, setFetchError] = useState<string | null>(null)
 
@@ -525,15 +566,19 @@ export default function MembersPage() {
     setFetchError(null)
     try {
       const [
-        { data: mData, error: mErr },
-        { data: pData, error: pErr },
-        { data: prData, error: prErr },
+        { data: mData,    error: mErr },
+        { data: pData,    error: pErr },
+        { data: prData,   error: prErr },
+        { data: drData,   error: drErr },
+        { data: drPrData, error: drPrErr },
       ] = await Promise.all([
         supabase.from('team_members').select('*').order('name'),
         supabase.from('projects').select('*').eq('is_archived', false),
         supabase.from('task_progress').select('*'),
+        supabase.from('dr_items').select('*').eq('is_archived', false),
+        supabase.from('dr_progress').select('*'),
       ])
-      const err = mErr || pErr || prErr
+      const err = mErr || pErr || prErr || drErr || drPrErr
       if (err) {
         console.error('[Members] fetch error:', err)
         setFetchError(`${err.message} (code: ${err.code})`)
@@ -541,6 +586,8 @@ export default function MembersPage() {
       setMembers(sortMembers(mData ?? []))
       setProjects(pData ?? [])
       setProgress(prData ?? [])
+      setDrItems(drData ?? [])
+      setDrProgress(drPrData ?? [])
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e)
       console.error('[Members] unexpected error:', e)
@@ -687,6 +734,8 @@ export default function MembersPage() {
         <span>멤버: <b className="text-gray-700">{members.length}</b></span>
         <span>프로젝트: <b className="text-gray-700">{projects.length}</b></span>
         <span>진행기록: <b className="text-gray-700">{progress.length}</b></span>
+        <span>DR: <b className="text-gray-700">{drItems.length}</b></span>
+        <span>DR진행: <b className="text-gray-700">{drProgress.length}</b></span>
         {fetchError && <span className="text-red-500 flex-1 truncate">오류: {fetchError}</span>}
       </div>
 
@@ -775,7 +824,7 @@ export default function MembersPage() {
             {/* 멤버 행들 */}
             {activeMembers.map((member, mi) => {
               const rowProjects = periods.map(p =>
-                getProjectsForMember(member, p, projects, progress)
+                getProjectsForMember(member, p, projects, progress, drItems, drProgress)
               )
               const totalProjects = rowProjects.reduce((s, arr) => s + arr.filter(i => i.kind === 'project').length, 0)
               const totalDR       = rowProjects.reduce((s, arr) => s + arr.filter(i => i.kind === 'dr').length, 0)
@@ -808,8 +857,8 @@ export default function MembersPage() {
                   {/* 기간별 태스크 셀 */}
                   {periods.map((p, pi) => {
                     const tasks = rowProjects[pi]
-                    const projectItems = tasks.filter(i => i.kind === 'project')
-                    const drItems      = tasks.filter(i => i.kind === 'dr')
+                    const projectChips = tasks.filter(i => i.kind === 'project')
+                    const drChips      = tasks.filter(i => i.kind === 'dr')
                     return (
                       <div
                         key={p.key}
@@ -822,35 +871,37 @@ export default function MembersPage() {
                           <>
                             {/* 카운트 요약 */}
                             <div className="flex items-center justify-end gap-1.5 mb-1.5">
-                              {projectItems.length > 0 && (
+                              {projectChips.length > 0 && (
                                 <span className="text-[11px] font-semibold text-gray-500">
-                                  Proj. {projectItems.length}
+                                  Proj. {projectChips.length}
                                 </span>
                               )}
-                              {projectItems.length > 0 && drItems.length > 0 && (
+                              {projectChips.length > 0 && drChips.length > 0 && (
                                 <span className="text-[10px] text-gray-300">/</span>
                               )}
-                              {drItems.length > 0 && (
+                              {drChips.length > 0 && (
                                 <span className="text-[11px] font-semibold text-gray-500">
-                                  DR {drItems.length}
+                                  DR {drChips.length}
                                 </span>
                               )}
                             </div>
-                            {projectItems.map((item) => (
+                            {projectChips.map((item) => (
                               <ProjectChip
-                                key={item.project.id}
-                                project={item.project}
+                                key={item.id}
+                                id={item.id}
+                                name={item.name}
                                 parentName={item.parentName}
                                 kind="project"
                               />
                             ))}
-                            {drItems.length > 0 && projectItems.length > 0 && (
+                            {drChips.length > 0 && projectChips.length > 0 && (
                               <div className="border-t border-dashed border-gray-100 my-1" />
                             )}
-                            {drItems.map((item) => (
+                            {drChips.map((item) => (
                               <ProjectChip
-                                key={item.project.id}
-                                project={item.project}
+                                key={item.id}
+                                id={item.id}
+                                name={item.name}
                                 parentName={item.parentName}
                                 kind="dr"
                               />
