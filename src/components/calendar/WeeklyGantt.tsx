@@ -554,11 +554,17 @@ function DeptAssigneePopup({
   }
 
   const toggle = (id: string) => {
+    const wasSelected = selected.has(id)
     setSelected(prev => {
       const next = new Set(prev)
       next.has(id) ? next.delete(id) : next.add(id)
       return next
     })
+    // 부서가 비어 있고 새로 추가하는 경우 → 멤버의 부서 자동 입력
+    if (!wasSelected && !dept) {
+      const m = members.find(m => m.id === id)
+      if (m?.department) setDept(m.department)
+    }
   }
 
   // 부서 선택 시 해당 부서 멤버만, 미선택 시 전체 멤버

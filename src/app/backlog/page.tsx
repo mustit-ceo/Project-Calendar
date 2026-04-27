@@ -14,6 +14,17 @@ import {
 const ALL_CATEGORIES = [...PROJECT_CATEGORIES, ...DR_CATEGORIES]
 const DR_DEPTS = ['BE', 'FE'] as const
 
+/* ── ISO timestamp → YYYY-MM-DD (로컬 시간 기준) ─ */
+function fmtIsoDate(iso: string | null | undefined): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return ''
+  const y  = d.getFullYear()
+  const m  = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${dd}`
+}
+
 /* ── 상태 뱃지 색상 ───────────────────────────── */
 const STATUS_STYLE: Record<Status, { bg: string; text: string; border: string }> = {
   '완료': { bg: '#dcfce7', text: '#14532d', border: '#86efac' },
@@ -216,11 +227,16 @@ function DeptAssigneePopup({
             <input
               type="checkbox"
               checked={selected.has(m.id)}
-              onChange={() => setSelected(prev => {
-                const n = new Set(prev)
-                n.has(m.id) ? n.delete(m.id) : n.add(m.id)
-                return n
-              })}
+              onChange={() => {
+                const wasSelected = selected.has(m.id)
+                setSelected(prev => {
+                  const n = new Set(prev)
+                  n.has(m.id) ? n.delete(m.id) : n.add(m.id)
+                  return n
+                })
+                // 부서가 비어 있고 새로 추가하는 경우 → 멤버의 부서 자동 입력
+                if (!wasSelected && !dept && m.department) setDept(m.department)
+              }}
               className="w-3.5 h-3.5 accent-blue-500 flex-shrink-0"
             />
             <span className="text-xs font-medium text-gray-800 flex-1">{m.name}</span>
@@ -244,7 +260,7 @@ function DeptAssigneePopup({
 }
 
 /* ── 셀 편집 유형 ─────────────────────────────── */
-type EditField = 'name' | 'jira' | 'status' | 'category' | 'team'
+type EditField = 'name' | 'jira' | 'status' | 'category' | 'team' | 'date'
 interface EditCell { id: string; field: EditField }
 
 /* ── 메인 페이지 ──────────────────────────────── */
@@ -342,6 +358,15 @@ export default function BacklogPage() {
   function commitImportance(id: string, importance: number) {
     updateLocal(id, { importance })
     saveField(id, { importance })
+  }
+
+  function commitDate(id: string, ymd: string) {
+    if (!ymd) { setEditCell(null); return }
+    // 로컬 자정 기준으로 ISO 변환 (UI 표시도 로컬 기준이라 round-trip 일치)
+    const iso = new Date(ymd + 'T00:00:00').toISOString()
+    updateLocal(id, { created_at: iso })
+    saveField(id, { created_at: iso })
+    setEditCell(null)
   }
 
   /* ── 추가 ──────────────────────────────────────── */
@@ -482,18 +507,19 @@ export default function BacklogPage() {
         <div className="bg-white rounded-xl border border-gray-200 overflow-visible">
           <table className="w-full table-fixed">
             <colgroup>
-              <col style={{ width: 130 }} />
-              <col />
               <col style={{ width: 110 }} />
               <col style={{ width: 130 }} />
+              <col />
+              <col style={{ width: 150 }} />
+              <col style={{ width: 130 }} />
               <col style={{ width: 90 }} />
               <col style={{ width: 90 }} />
-              <col style={{ width: 180 }} />
+              <col style={{ width: 100 }} />
               <col style={{ width: 50 }} />
             </colgroup>
             <thead>
               <tr className="border-b border-gray-200 bg-gray-50">
-                {['카테고리', '프로젝트', '중요도', 'JIRA', '상태', '부서', '담당자', ''].map((h, i) => (
+                {['생성일', '카테고리', '프로젝트', '중요도', 'JIRA', '상태', '부서', '담당자', ''].map((h, i) => (
                   <th key={i} className="text-center text-xs font-semibold text-gray-500 uppercase tracking-wide py-3 px-3">
                     {h}
                   </th>
@@ -504,6 +530,7 @@ export default function BacklogPage() {
               {/* 추가 행 */}
               {adding && (
                 <tr className="border-b border-blue-100 bg-blue-50/40">
+                  <td className="py-2 px-3 text-center text-xs text-gray-400">자동</td>
                   <td className="py-2 px-3">
                     <select
                       value={addForm.category}
@@ -543,7 +570,7 @@ export default function BacklogPage() {
               {/* 데이터 없음 */}
               {items.length === 0 && !adding && (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-gray-400 text-sm">
+                  <td colSpan={9} className="py-12 text-center text-gray-400 text-sm">
                     Backlog 항목이 없습니다. 위 버튼으로 추가하세요.
                   </td>
                 </tr>
@@ -560,6 +587,26 @@ export default function BacklogPage() {
                     key={item.id}
                     className="border-b border-gray-200 last:border-b-0 hover:bg-gray-50/50 group"
                   >
+                    {/* 생성일 */}
+                    <td
+                      className="py-3 px-3 text-center cursor-pointer"
+                      onClick={() => setEditCell({ id: item.id, field: 'date' })}
+                    >
+                      {editCell?.id === item.id && editCell?.field === 'date' ? (
+                        <input
+                          type="date"
+                          autoFocus
+                          defaultValue={fmtIsoDate(item.created_at)}
+                          onChange={e => commitDate(item.id, e.target.value)}
+                          onBlur={e => commitDate(item.id, e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Escape') setEditCell(null) }}
+                          className="w-full border border-blue-400 rounded px-1.5 py-0.5 text-xs focus:outline-none"
+                        />
+                      ) : (
+                        <span className="text-xs text-gray-500">{fmtIsoDate(item.created_at) || '-'}</span>
+                      )}
+                    </td>
+
                     {/* 카테고리 */}
                     <td
                       className="py-3 px-3 text-center cursor-pointer"
