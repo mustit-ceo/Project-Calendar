@@ -568,12 +568,15 @@ export function DRGantt({
       {/* 테이블 */}
       <div
         ref={tableScrollRef}
-        className="overflow-auto border border-gray-200 rounded-xl"
+        className="overflow-x-auto select-none border border-gray-200 rounded-xl"
         style={{
-          maxHeight: 'calc(100vh - 260px)',
+          scrollbarWidth: 'none',
+          msOverflowStyle: 'none',
           cursor: isPanning ? 'grabbing' : 'default',
           userSelect: isPanning ? 'none' : 'auto',
-        }}
+          WebkitOverflowScrolling: 'touch',
+          willChange: 'scroll-position',
+        } as React.CSSProperties}
         onScroll={handleTableScroll}
         onMouseDown={e => {
           if (dragHandleDownRef.current) return
