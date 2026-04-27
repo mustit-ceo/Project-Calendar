@@ -91,6 +91,18 @@ export interface BacklogItem {
   updated_at: string
 }
 
+// ── Admin 전용 타입 ──────────────────────────────────────────
+export type UserRole = 'admin' | 'member'
+
+export interface AllowedUser {
+  id: string
+  email: string
+  name: string | null
+  role: UserRole
+  is_active: boolean
+  created_at: string
+}
+
 // ── DR 전용 타입 ─────────────────────────────────────────────
 export interface DrItem {
   id: string
