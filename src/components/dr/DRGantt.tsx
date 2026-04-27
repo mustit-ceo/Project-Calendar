@@ -6,7 +6,7 @@ import { DrItem, DrProgress, Status, Department, TeamMember } from '@/lib/types'
 import { STATUSES, DR_DEPARTMENTS, getJiraUrl } from '@/lib/utils'
 import {
   addWeeks, addDays, format, differenceInCalendarWeeks,
-  isSameDay, subMonths, addMonths, startOfMonth,
+  isSameDay, subMonths, addMonths, startOfMonth, getISOWeek,
 } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import {
@@ -647,51 +647,66 @@ export function DRGantt({
         <table className="border-collapse" style={{ width: tableWidth, tableLayout: 'fixed' }}>
           {/* ── 헤더 ── */}
           <thead>
-            {/* 월 행 */}
-            <tr className="border-b border-gray-200">
+            <tr>
+              {/* 고정 컬럼 레이블 */}
               {COL_KEYS.map(k => (
                 <th
                   key={k}
-                  className="sticky top-0 z-20 bg-gray-50 border-r border-gray-200 text-left px-3 py-2 text-xs font-semibold text-gray-500"
-                  style={{ left: stickyLeft[k], width: widths[k] }}
+                  className="sticky top-0 z-20 bg-gray-50 border-r border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wide"
+                  style={{ left: stickyLeft[k], width: widths[k], verticalAlign: 'middle', textAlign: 'center' }}
                 >
                   {k === 'name' ? 'DR' : k === 'jira' ? 'JIRA' : k === 'status' ? '상태' : '부서 / 담당자'}
                 </th>
               ))}
+              {/* 날짜 영역: 주차 + 월 + 일자 3단 */}
               <th className="sticky top-0 z-10 bg-gray-50 p-0" style={{ width: dateAreaW }}>
-                <div className="relative" style={{ height: 28 }}>
-                  {monthSpans.map(s => (
-                    <span
-                      key={s.label + s.left}
-                      className="absolute text-[11px] font-semibold text-gray-500 px-2"
-                      style={{ left: s.left, width: s.width, top: '50%', transform: 'translateY(-50%)' }}
+                {/* 주차 행 */}
+                <div className="relative border-b border-gray-200" style={{ height: 30 }}>
+                  {yearWeeks.map((w, wi) => (
+                    <div
+                      key={wi}
+                      className="absolute top-0 flex items-center justify-center select-none border-l border-gray-300"
+                      style={{ left: wi * 5 * DAY_W, width: 5 * DAY_W, height: 30 }}
                     >
-                      {s.label}
-                    </span>
+                      <span className="text-sm font-bold text-gray-700">{getISOWeek(w)}w</span>
+                    </div>
                   ))}
                 </div>
-              </th>
-            </tr>
-            {/* 주차 행 */}
-            <tr className="border-b-2 border-gray-300">
-              {COL_KEYS.map(k => (
-                <th
-                  key={k}
-                  className="sticky z-20 bg-white border-r border-gray-200 p-0"
-                  style={{ top: 28, left: stickyLeft[k], width: widths[k] }}
-                />
-              ))}
-              <th className="sticky z-10 bg-white p-0" style={{ top: 28, width: dateAreaW }}>
-                <div className="relative" style={{ height: 20 }}>
-                  {weekNumbers.map(w => (
-                    <span
-                      key={w.left}
-                      className="absolute text-[9px] text-gray-400 font-medium"
-                      style={{ left: w.left + 2, top: '50%', transform: 'translateY(-50%)', width: DAY_W * 5 }}
+                {/* 월 행 */}
+                <div className="relative border-b border-gray-300 bg-gray-50" style={{ height: 30 }}>
+                  {monthSpans.map((s, i) => (
+                    <div
+                      key={i}
+                      className="absolute top-0 flex items-center justify-center select-none border-l-2 border-gray-400"
+                      style={{ left: s.left, width: s.width, height: 30 }}
                     >
-                      {w.label}
-                    </span>
+                      <span className="text-xs font-bold text-gray-600 tracking-wide">{s.label}</span>
+                    </div>
                   ))}
+                </div>
+                {/* 날짜 행 */}
+                <div className="relative bg-white" style={{ height: 34, boxShadow: '0 3px 0 #9ca3af' }}>
+                  {yearDays.map((d, di) => {
+                    const isToday      = isSameDay(d, today)
+                    const isMonday     = di % 5 === 0
+                    const isMonthStart = di > 0 && format(d, 'M') !== format(yearDays[di - 1], 'M')
+                    return (
+                      <div
+                        key={di}
+                        className={`absolute top-0 flex flex-col items-center justify-center select-none
+                          ${isMonthStart ? 'border-l-2 border-gray-400' : isMonday ? 'border-l border-gray-300' : ''}
+                          ${isToday ? 'bg-red-50' : ''}`}
+                        style={{ left: di * DAY_W, width: DAY_W, height: 34 }}
+                      >
+                        <span className={`text-xs font-medium leading-none ${isToday ? 'text-red-500' : 'text-gray-400'}`}>
+                          {format(d, 'd')}
+                        </span>
+                        <span className={`text-[10px] leading-none mt-0.5 ${isToday ? 'text-red-300' : 'text-gray-300'}`}>
+                          {format(d, 'E', { locale: ko })}
+                        </span>
+                      </div>
+                    )
+                  })}
                 </div>
               </th>
             </tr>
@@ -960,6 +975,41 @@ export function DRGantt({
       {/* ── 액션 메뉴 ── */}
       {actionMenu && (() => {
         const { rect, item } = actionMenu
+        const top  = Math.min(rect.bottom + 4, window.innerHeight - 100)
+        const left = Math.max(rect.left - 100, 8)
+        return (
+          <>
+            <div className="fixed inset-0 z-[9998]" onClick={() => setActionMenu(null)} />
+            <div
+              className="fixed z-[9999] bg-white border border-gray-200 rounded-xl shadow-xl py-1 w-36"
+              style={{ top, left }}
+              onClick={e => e.stopPropagation()}
+            >
+              <button
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer"
+                onClick={() => {
+                  setActionMenu(null)
+                  startEdit(item, 'name')
+                }}
+              >
+                <Pencil size={13} className="text-gray-400" />
+                이름 수정
+              </button>
+              <button
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 cursor-pointer"
+                onClick={() => handleDelete(item.id)}
+              >
+                <Trash2 size={13} />
+                삭제
+              </button>
+            </div>
+          </>
+        )
+      })()}
+    </div>
+  )
+}
+actionMenu
         const top  = Math.min(rect.bottom + 4, window.innerHeight - 100)
         const left = Math.max(rect.left - 100, 8)
         return (
