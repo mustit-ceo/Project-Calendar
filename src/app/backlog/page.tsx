@@ -600,10 +600,10 @@ export default function BacklogPage() {
                           onChange={e => commitDate(item.id, e.target.value)}
                           onBlur={e => commitDate(item.id, e.target.value)}
                           onKeyDown={e => { if (e.key === 'Escape') setEditCell(null) }}
-                          className="w-full border border-blue-400 rounded px-1.5 py-0.5 text-xs focus:outline-none"
+                          className="w-full border border-blue-400 rounded px-1.5 py-0.5 text-[13px] focus:outline-none"
                         />
                       ) : (
-                        <span className="text-xs text-gray-500">{fmtIsoDate(item.created_at) || '-'}</span>
+                        <span className="text-[13px] text-gray-500">{fmtIsoDate(item.created_at) || '-'}</span>
                       )}
                     </td>
 
@@ -715,7 +715,7 @@ export default function BacklogPage() {
                     <td className="py-3 px-3 text-center">
                       {item.department ? (
                         <span
-                          className="inline-block text-xs px-1.5 py-0.5 rounded cursor-pointer hover:opacity-80"
+                          className="inline-block text-[13px] px-1.5 py-0.5 rounded cursor-pointer hover:opacity-80"
                           style={{ background: '#e0e7ff', color: '#3730a3' }}
                           onClick={e => {
                             setEditCell({ id: item.id, field: 'team' })
@@ -726,7 +726,7 @@ export default function BacklogPage() {
                         </span>
                       ) : (
                         <span
-                          className="text-xs text-gray-300 cursor-pointer hover:text-blue-400"
+                          className="text-[13px] text-gray-300 cursor-pointer hover:text-blue-400"
                           onClick={e => {
                             setEditCell({ id: item.id, field: 'team' })
                             setTeamAnchor((e.currentTarget as HTMLElement).getBoundingClientRect())
@@ -746,9 +746,9 @@ export default function BacklogPage() {
                       }}
                     >
                       {assigneeNames ? (
-                        <span className="text-xs text-gray-700">{assigneeNames}</span>
+                        <span className="text-[13px] text-gray-700">{assigneeNames}</span>
                       ) : (
-                        <span className="text-xs text-gray-300 hover:text-blue-400">-</span>
+                        <span className="text-[13px] text-gray-300 hover:text-blue-400">-</span>
                       )}
                     </td>
 

@@ -359,10 +359,12 @@ export default function UxiLabPage() {
   }
 
   async function handleAdd() {
-    const defaultDate = `${selectedMonth}-01`
+    // 오늘 날짜 (YYYY-MM-DD, 로컬 기준)
+    const t = new Date()
+    const today = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`
     const { data } = await supabase
       .from('uxi_lab')
-      .insert({ agenda: '', business_impact: 0, ux_impact: 0, sort_order: items.length, entry_date: defaultDate })
+      .insert({ agenda: '', business_impact: 0, ux_impact: 0, sort_order: items.length, entry_date: today })
       .select().single()
     if (data) {
       setItems(prev => [...prev, data])
@@ -542,7 +544,7 @@ export default function UxiLabPage() {
             </colgroup>
             <thead>
               <tr>
-                <th className={`${thBase} text-center relative`} style={{ ...thSticky, ...thW(0) }}>기재일<ResizeHandle colIdx={0} /></th>
+                <th className={`${thBase} text-center relative`} style={{ ...thSticky, ...thW(0) }}>생성일<ResizeHandle colIdx={0} /></th>
                 <th className={`${thBase} text-center relative`} style={{ ...thSticky, ...thW(1) }}>구분<ResizeHandle colIdx={1} /></th>
                 <th className={`${thBase} text-left relative`} style={{ ...thSticky, ...thW(2) }}>아젠다<ResizeHandle colIdx={2} /></th>
                 <th className={`${thBase} text-center relative`} style={{ ...thSticky, ...thW(3) }}>참조<ResizeHandle colIdx={3} /></th>
