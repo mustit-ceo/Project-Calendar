@@ -35,12 +35,25 @@ export async function GET(request: NextRequest) {
 
     const { data: sessionData, error } = await supabase.auth.exchangeCodeForSession(code)
     if (!error) {
-      // 마지막 로그인 시각 기록 (allowed_users 테이블)
       const email = sessionData?.user?.email
       if (email) {
+        const meta = sessionData?.user?.user_metadata as
+          { full_name?: string; name?: string } | undefined
+        const name = meta?.full_name ?? meta?.name ?? null
+        const now = new Date().toISOString()
+
+        // 신규 사용자면 자동 등록 (이미 있으면 무시 — name 덮어쓰기 방지)
         await supabase
           .from('allowed_users')
-          .update({ last_login_at: new Date().toISOString() })
+          .upsert(
+            { email, name, last_login_at: now },
+            { onConflict: 'email', ignoreDuplicates: true }
+          )
+
+        // 마지막 로그인 시각 갱신 (기존 사용자도 포함)
+        await supabase
+          .from('allowed_users')
+          .update({ last_login_at: now })
           .eq('email', email)
       }
       return NextResponse.redirect(`${origin}${next}`)
