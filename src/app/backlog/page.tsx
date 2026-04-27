@@ -6,9 +6,13 @@ import { BacklogItem, TeamMember, Status, Department } from '@/lib/types'
 import {
   PROJECT_CATEGORIES, DR_CATEGORIES, STATUSES, DEPARTMENTS, getJiraUrl,
 } from '@/lib/utils'
-import { Plus, RefreshCw, Check, ExternalLink, X } from 'lucide-react'
+import {
+  Plus, RefreshCw, Check, X, Star, MoreVertical,
+  CalendarPlus, Wrench, Trash2,
+} from 'lucide-react'
 
 const ALL_CATEGORIES = [...PROJECT_CATEGORIES, ...DR_CATEGORIES]
+const DR_DEPTS = ['BE', 'FE'] as const
 
 /* ── 상태 뱃지 색상 ───────────────────────────── */
 const STATUS_STYLE: Record<Status, { bg: string; text: string; border: string }> = {
@@ -17,6 +21,102 @@ const STATUS_STYLE: Record<Status, { bg: string; text: string; border: string }>
   '예정': { bg: '#fef9c3', text: '#713f12', border: '#fde047' },
   '대기': { bg: '#f3f4f6', text: '#374151', border: '#d1d5db' },
   '보류': { bg: '#fee2e2', text: '#7f1d1d', border: '#fca5a5' },
+}
+
+/* ── 별점 입력 (0~5, 0=미설정) ──────────────────── */
+function StarRating({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  const [hover, setHover] = useState(0)
+  const display = hover || value
+  return (
+    <div
+      className="inline-flex items-center gap-0.5"
+      onMouseLeave={() => setHover(0)}
+    >
+      {[1, 2, 3, 4, 5].map(n => (
+        <button
+          key={n}
+          type="button"
+          onClick={() => onChange(value === n ? 0 : n)}
+          onMouseEnter={() => setHover(n)}
+          className="cursor-pointer p-0.5 leading-none"
+          title={`${n}점`}
+        >
+          <Star
+            size={14}
+            className={
+              display >= n
+                ? 'fill-yellow-400 text-yellow-400'
+                : 'text-gray-300'
+            }
+          />
+        </button>
+      ))}
+    </div>
+  )
+}
+
+/* ── 액션 메뉴 (⋮ → 프로젝트로 이동 / DR로 이동 / 삭제) ── */
+function ItemActionMenu({
+  onMoveToProject, onMoveToDr, onDelete,
+}: {
+  onMoveToProject: () => void
+  onMoveToDr:      () => void
+  onDelete:        () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    const t = setTimeout(() => document.addEventListener('mousedown', handler), 0)
+    return () => { clearTimeout(t); document.removeEventListener('mousedown', handler) }
+  }, [open])
+
+  return (
+    <div ref={menuRef} className="relative inline-block">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className={`p-1 rounded hover:bg-gray-100 cursor-pointer transition-colors ${
+          open ? 'text-gray-700 bg-gray-100' : 'text-gray-400 opacity-0 group-hover:opacity-100'
+        }`}
+        title="메뉴"
+      >
+        <MoreVertical size={14} />
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 z-20 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[150px]">
+          <button
+            type="button"
+            onClick={() => { setOpen(false); onMoveToProject() }}
+            className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-blue-50 cursor-pointer flex items-center gap-2"
+          >
+            <CalendarPlus size={12} /> 프로젝트로 이동
+          </button>
+          <button
+            type="button"
+            onClick={() => { setOpen(false); onMoveToDr() }}
+            className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-red-50 cursor-pointer flex items-center gap-2"
+          >
+            <Wrench size={12} /> DR로 이동
+          </button>
+          <div className="border-t border-gray-100 my-1" />
+          <button
+            type="button"
+            onClick={() => { setOpen(false); onDelete() }}
+            className="w-full text-left px-3 py-1.5 text-xs text-red-500 hover:bg-red-50 cursor-pointer flex items-center gap-2"
+          >
+            <Trash2 size={12} /> 삭제
+          </button>
+        </div>
+      )}
+    </div>
+  )
 }
 
 /* ── 부서/담당자 팝업 ─────────────────────────── */
@@ -239,6 +339,11 @@ export default function BacklogPage() {
     setTeamAnchor(null)
   }
 
+  function commitImportance(id: string, importance: number) {
+    updateLocal(id, { importance })
+    saveField(id, { importance })
+  }
+
   /* ── 추가 ──────────────────────────────────────── */
   async function handleAdd() {
     if (!addForm.name.trim()) return
@@ -253,6 +358,7 @@ export default function BacklogPage() {
         assignees: [],
         jira_ticket: null,
         sort_order: nextOrder,
+        importance: 0,
         is_archived: false,
       })
       .select('*')
@@ -269,6 +375,55 @@ export default function BacklogPage() {
     if (!confirm('이 항목을 삭제할까요?')) return
     setItems(prev => prev.filter(p => p.id !== id))
     await supabase.from('backlog_items').delete().eq('id', id)
+  }
+
+  /* ── 프로젝트로 이동 ─────────────────────────── */
+  async function moveToProject(item: BacklogItem) {
+    if (!confirm(`"${item.name}"을(를) 프로젝트로 이동할까요?`)) return
+    const category = PROJECT_CATEGORIES.includes(item.category) ? item.category : '신규기능'
+    const { error } = await supabase.from('projects').insert({
+      category,
+      name: item.name,
+      status: item.status,
+      department: item.department,
+      assignees: item.assignees ?? [],
+      jira_ticket: item.jira_ticket,
+      parent_id: null,
+      sort_order: 9999,
+      is_archived: false,
+    })
+    if (error) {
+      alert(`이동 실패: ${error.message}`)
+      return
+    }
+    await supabase.from('backlog_items').delete().eq('id', item.id)
+    setItems(prev => prev.filter(p => p.id !== item.id))
+  }
+
+  /* ── DR로 이동 ───────────────────────────────── */
+  async function moveToDr(item: BacklogItem) {
+    if (!confirm(`"${item.name}"을(를) DR로 이동할까요?`)) return
+    const category = DR_CATEGORIES.includes(item.category) ? item.category : 'DR'
+    // DR은 BE/FE만 허용
+    const dept = (item.department && (DR_DEPTS as readonly string[]).includes(item.department))
+      ? item.department
+      : null
+    const { error } = await supabase.from('dr_items').insert({
+      category,
+      name: item.name,
+      status: item.status,
+      department: dept,
+      assignees: item.assignees ?? [],
+      jira_ticket: item.jira_ticket,
+      sort_order: 9999,
+      is_archived: false,
+    })
+    if (error) {
+      alert(`이동 실패: ${error.message}`)
+      return
+    }
+    await supabase.from('backlog_items').delete().eq('id', item.id)
+    setItems(prev => prev.filter(p => p.id !== item.id))
   }
 
   /* ── 멤버 이름 ───────────────────────────────── */
@@ -309,7 +464,8 @@ export default function BacklogPage() {
           </div>
           <div className="text-gray-500 text-xs text-center mt-1">
             Supabase SQL Editor에서{' '}
-            <code className="bg-gray-100 px-1 py-0.5 rounded">create_backlog_items.sql</code>을 먼저 실행하세요
+            <code className="bg-gray-100 px-1 py-0.5 rounded">create_backlog_items.sql</code>과{' '}
+            <code className="bg-gray-100 px-1 py-0.5 rounded">migration_backlog_importance.sql</code>을 실행하세요
           </div>
           <button
             onClick={fetchData}
@@ -328,15 +484,16 @@ export default function BacklogPage() {
             <colgroup>
               <col style={{ width: 130 }} />
               <col />
+              <col style={{ width: 110 }} />
               <col style={{ width: 130 }} />
               <col style={{ width: 90 }} />
               <col style={{ width: 90 }} />
               <col style={{ width: 180 }} />
-              <col style={{ width: 36 }} />
+              <col style={{ width: 50 }} />
             </colgroup>
             <thead>
               <tr className="border-b border-gray-200 bg-gray-50">
-                {['카테고리', '프로젝트', 'JIRA', '상태', '부서', '담당자', ''].map((h, i) => (
+                {['카테고리', '프로젝트', '중요도', 'JIRA', '상태', '부서', '담당자', ''].map((h, i) => (
                   <th key={i} className="text-center text-xs font-semibold text-gray-500 uppercase tracking-wide py-3 px-3">
                     {h}
                   </th>
@@ -379,14 +536,14 @@ export default function BacklogPage() {
                       </button>
                     </div>
                   </td>
-                  <td colSpan={5} className="py-2 px-3 text-xs text-gray-400">저장 후 나머지 항목을 편집하세요</td>
+                  <td colSpan={6} className="py-2 px-3 text-xs text-gray-400">저장 후 나머지 항목을 편집하세요</td>
                 </tr>
               )}
 
               {/* 데이터 없음 */}
               {items.length === 0 && !adding && (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-gray-400 text-sm">
+                  <td colSpan={8} className="py-12 text-center text-gray-400 text-sm">
                     Backlog 항목이 없습니다. 위 버튼으로 추가하세요.
                   </td>
                 </tr>
@@ -401,11 +558,11 @@ export default function BacklogPage() {
                 return (
                   <tr
                     key={item.id}
-                    className="border-b border-gray-100 last:border-b-0 hover:bg-gray-50/50 group"
+                    className="border-b border-gray-200 last:border-b-0 hover:bg-gray-50/50 group"
                   >
                     {/* 카테고리 */}
                     <td
-                      className="py-3 px-3 cursor-pointer"
+                      className="py-3 px-3 text-center cursor-pointer"
                       onClick={() => setEditCell({ id: item.id, field: 'category' })}
                     >
                       {editCell?.id === item.id && editCell?.field === 'category' ? (
@@ -444,11 +601,16 @@ export default function BacklogPage() {
                       )}
                     </td>
 
-                    {/* JIRA */}
-                    <td
-                      className="py-3 px-3 cursor-pointer"
-                      onClick={() => setEditCell({ id: item.id, field: 'jira' })}
-                    >
+                    {/* 중요도 (별점) */}
+                    <td className="py-3 px-3 text-center">
+                      <StarRating
+                        value={item.importance ?? 0}
+                        onChange={v => commitImportance(item.id, v)}
+                      />
+                    </td>
+
+                    {/* JIRA — 클릭=편집, Ctrl/Cmd+클릭=링크 */}
+                    <td className="py-3 px-3 text-center">
                       {editCell?.id === item.id && editCell?.field === 'jira' ? (
                         <InlineText
                           initial={item.jira_ticket ?? ''}
@@ -457,24 +619,28 @@ export default function BacklogPage() {
                           className="w-full border border-blue-400 rounded px-2 py-1 text-xs focus:outline-none"
                           placeholder="PROJ-0000"
                         />
-                      ) : jiraUrl ? (
-                        <a
-                          href={jiraUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          onClick={e => e.stopPropagation()}
-                          className="flex items-center gap-1 text-xs text-blue-600 hover:underline"
-                        >
-                          {item.jira_ticket} <ExternalLink size={10} className="flex-shrink-0" />
-                        </a>
                       ) : (
-                        <span className="text-xs text-gray-300">-</span>
+                        <span
+                          className={`inline-block cursor-pointer rounded px-1.5 py-0.5 hover:bg-blue-50 transition-colors ${
+                            item.jira_ticket ? 'text-xs text-blue-600' : 'text-xs text-gray-300'
+                          }`}
+                          onClick={e => {
+                            if ((e.ctrlKey || e.metaKey) && jiraUrl) {
+                              window.open(jiraUrl, '_blank', 'noopener,noreferrer')
+                            } else {
+                              setEditCell({ id: item.id, field: 'jira' })
+                            }
+                          }}
+                          title={jiraUrl ? 'Ctrl+클릭으로 링크 열기' : '클릭하여 입력'}
+                        >
+                          {item.jira_ticket || '-'}
+                        </span>
                       )}
                     </td>
 
                     {/* 상태 */}
                     <td
-                      className="py-3 px-3 cursor-pointer"
+                      className="py-3 px-3 text-center cursor-pointer"
                       onClick={() => setEditCell({ id: item.id, field: 'status' })}
                     >
                       {editCell?.id === item.id && editCell?.field === 'status' ? (
@@ -490,7 +656,7 @@ export default function BacklogPage() {
                         </select>
                       ) : (
                         <span
-                          className="text-xs px-2 py-0.5 rounded border font-medium"
+                          className="inline-block text-xs px-2 py-0.5 rounded border font-medium"
                           style={{ background: st.bg, color: st.text, borderColor: st.border }}
                         >
                           {item.status}
@@ -502,7 +668,7 @@ export default function BacklogPage() {
                     <td className="py-3 px-3 text-center">
                       {item.department ? (
                         <span
-                          className="text-xs px-1.5 py-0.5 rounded cursor-pointer hover:opacity-80"
+                          className="inline-block text-xs px-1.5 py-0.5 rounded cursor-pointer hover:opacity-80"
                           style={{ background: '#e0e7ff', color: '#3730a3' }}
                           onClick={e => {
                             setEditCell({ id: item.id, field: 'team' })
@@ -526,7 +692,7 @@ export default function BacklogPage() {
 
                     {/* 담당자 */}
                     <td
-                      className="py-3 px-3 cursor-pointer"
+                      className="py-3 px-3 text-center cursor-pointer"
                       onClick={e => {
                         setEditCell({ id: item.id, field: 'team' })
                         setTeamAnchor((e.currentTarget as HTMLElement).getBoundingClientRect())
@@ -539,14 +705,13 @@ export default function BacklogPage() {
                       )}
                     </td>
 
-                    {/* 삭제 */}
+                    {/* 액션 메뉴 */}
                     <td className="py-3 px-2 text-center">
-                      <button
-                        onClick={() => handleDelete(item.id)}
-                        className="opacity-0 group-hover:opacity-100 p-1 text-gray-300 hover:text-red-400 rounded cursor-pointer transition-opacity"
-                      >
-                        <X size={14} />
-                      </button>
+                      <ItemActionMenu
+                        onMoveToProject={() => moveToProject(item)}
+                        onMoveToDr={() => moveToDr(item)}
+                        onDelete={() => handleDelete(item.id)}
+                      />
                     </td>
                   </tr>
                 )

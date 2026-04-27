@@ -86,6 +86,8 @@ export interface BacklogItem {
   department: Department | null
   assignees: string[]
   sort_order: number
+  /** 0 = 미설정, 1~5 = 별점 */
+  importance: number
   is_archived: boolean
   created_at: string
   updated_at: string
