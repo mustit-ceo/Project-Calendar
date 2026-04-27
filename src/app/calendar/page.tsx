@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Project, TaskProgress, TeamMember, DrItem, DrProgress } from '@/lib/types'
-import { WeeklyGantt } from '@/components/calendar/WeeklyGantt'
+import { WeeklyGantt, type SortMode } from '@/components/calendar/WeeklyGantt'
 import { DRGantt } from '@/components/dr/DRGantt'
 import { ProjectForm } from '@/components/projects/ProjectForm'
 import { DrForm } from '@/components/dr/DrForm'
@@ -44,6 +44,7 @@ export default function CalendarPage() {
   const [filterCategory,     setFilterCategory]     = useState('all')
   const [hideCompleted,      setHideCompleted]      = useState(true)
   const [hideCompletedTasks, setHideCompletedTasks] = useState(false)
+  const [sortMode,           setSortMode]           = useState<SortMode>('manual')
 
   /* ─ DR 탭 필터 ───────────────────────────────────────────── */
   const [drFilterStatus,  setDrFilterStatus]  = useState('all')
@@ -217,10 +218,10 @@ export default function CalendarPage() {
       return aMin.localeCompare(bMin)
     })
 
-  const resetFilters   = () => { setFilterStatus('all'); setFilterDept('all'); setFilterCategory('all') }
+  const resetFilters   = () => { setFilterStatus('all'); setFilterDept('all'); setFilterCategory('all'); setSortMode('manual') }
   const resetDrFilters = () => { setDrFilterStatus('all'); setDrFilterDept('all') }
 
-  const isDirty   = filterStatus !== 'all' || filterDept !== 'all' || filterCategory !== 'all'
+  const isDirty   = filterStatus !== 'all' || filterDept !== 'all' || filterCategory !== 'all' || sortMode !== 'manual'
   const isDrDirty = drFilterStatus !== 'all' || drFilterDept !== 'all'
 
   /* ─ 렌더 ─────────────────────────────────────────────────── */
@@ -288,6 +289,7 @@ export default function CalendarPage() {
           teamMembers={teamMembers}
           rootCount={filteredProjects.filter(p => !p.parent_id).length}
           highlightId={highlightId}
+          sortMode={sortMode}
           onUpdateProject={handleUpdateProject}
           onUpdateProgress={handleUpdateProgress}
           onAddProject={handleAddProject}
@@ -317,6 +319,19 @@ export default function CalendarPage() {
               >
                 <option value="all">전체 부서</option>
                 {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
+              </select>
+
+              <div className="w-px h-4 bg-gray-200 mx-0.5" />
+
+              <select
+                value={sortMode}
+                onChange={e => setSortMode(e.target.value as SortMode)}
+                className="px-2.5 py-1 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 cursor-pointer"
+                title={sortMode === 'manual' ? '드래그로 순서 변경 가능' : '드래그 순서 변경은 기본 정렬에서만 가능'}
+              >
+                <option value="manual">기본 (수동 순서)</option>
+                <option value="startAsc">시작일 오래된순</option>
+                <option value="ltsDesc">LTS 최근일순</option>
               </select>
 
               <div className="w-px h-4 bg-gray-200 mx-0.5" />

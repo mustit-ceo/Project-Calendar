@@ -668,6 +668,9 @@ type DisplayRow =
   | { kind: 'existing'; project: Project; depth: number }
   | { kind: 'new';      parentId: string; depth: number }
 
+/* ─ 정렬 모드 ─────────────────────────────────── */
+export type SortMode = 'manual' | 'startAsc' | 'ltsDesc'
+
 /* ─ WeeklyGantt Props ──────────────────────────── */
 interface WeeklyGanttProps {
   projects: Project[]
@@ -675,6 +678,8 @@ interface WeeklyGanttProps {
   teamMembers?: TeamMember[]
   rootCount?: number
   highlightId?: string
+  /** 루트 프로젝트 정렬 모드 (기본 'manual' = sort_order 순) */
+  sortMode?: SortMode
   onUpdateProject?: (id: string, updates: Partial<Project>) => void
   onUpdateProgress?: (projectId: string, dates: string[]) => void
   /** 신규 task/sub-task 추가 후 부모 state 즉시 반영용 */
@@ -690,6 +695,7 @@ export function WeeklyGantt({
   progressRecords,
   teamMembers = [],
   highlightId,
+  sortMode = 'manual',
   onUpdateProject,
   onUpdateProgress,
   onAddProject,
@@ -1013,14 +1019,26 @@ export function WeeklyGantt({
 
   const tree = useMemo(() => {
     const raw = buildProjectTree(projects.filter(p => !p.is_archived))
-    // 루트 프로젝트만 시작일 오름차순 정렬 (null은 후순위), 하위 태스크는 기존 sort_order 유지
-    return [...raw].sort((a, b) => {
-      if (!a.start_date && !b.start_date) return 0
-      if (!a.start_date) return 1
-      if (!b.start_date) return -1
-      return a.start_date.localeCompare(b.start_date)
-    })
-  }, [projects])
+    // 루트 프로젝트만 sortMode에 따라 재정렬 (하위 태스크는 buildProjectTree 입력 순서 = sort_order 유지)
+    if (sortMode === 'startAsc') {
+      return [...raw].sort((a, b) => {
+        if (!a.start_date && !b.start_date) return 0
+        if (!a.start_date) return 1
+        if (!b.start_date) return -1
+        return a.start_date.localeCompare(b.start_date)
+      })
+    }
+    if (sortMode === 'ltsDesc') {
+      return [...raw].sort((a, b) => {
+        if (!a.lts_date && !b.lts_date) return 0
+        if (!a.lts_date) return 1
+        if (!b.lts_date) return -1
+        return b.lts_date.localeCompare(a.lts_date)
+      })
+    }
+    // 'manual' — DB sort_order 순서 그대로 유지 (드래그로 sort_order 갱신)
+    return raw
+  }, [projects, sortMode])
 
   const flatRows = useMemo(() => {
     function flatten(nodes: Project[], depth = 0): { project: Project; depth: number }[] {
@@ -1604,6 +1622,8 @@ export function WeeklyGantt({
                     style={{ background: '#ffffff', opacity: dragId === project.id ? 0.35 : 1, transition: 'opacity 0.1s' }}
                     draggable
                     onDragStart={e => {
+                      // 기본 정렬에서만 순서 변경 허용 (다른 정렬 모드에선 드래그 차단)
+                      if (sortMode !== 'manual') { e.preventDefault(); return }
                       // 드래그 핸들에서만 드래그 허용
                       if (!dragHandleDownRef.current) { e.preventDefault(); return }
                       dragHandleDownRef.current = false
@@ -1663,15 +1683,19 @@ export function WeeklyGantt({
                         </div>
                       ) : (
                         <div className="flex items-center gap-1" style={{ paddingLeft: depth * 14 }}>
-                          {/* 드래그 핸들 — hover 시 표시, scroll handler가 button을 무시하므로 충돌 없음 */}
+                          {/* 드래그 핸들 — hover 시 표시, 기본 정렬에서만 활성 */}
                           <button
                             type="button"
-                            className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 p-0.5 rounded -ml-1"
+                            className={`flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded -ml-1 ${
+                              sortMode === 'manual'
+                                ? 'cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500'
+                                : 'cursor-not-allowed text-gray-200'
+                            }`}
                             tabIndex={-1}
-                            onMouseDown={() => { dragHandleDownRef.current = true }}
+                            onMouseDown={() => { if (sortMode === 'manual') dragHandleDownRef.current = true }}
                             onMouseUp={() => { dragHandleDownRef.current = false }}
                             onClick={e => e.stopPropagation()}
-                            title="드래그하여 순서 변경"
+                            title={sortMode === 'manual' ? '드래그하여 순서 변경' : '기본 정렬에서만 순서 변경 가능합니다'}
                           >
                             <GripVertical size={14} />
                           </button>
