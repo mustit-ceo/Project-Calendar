@@ -6,7 +6,7 @@ import { DrItem, DrProgress, Status, Department, TeamMember } from '@/lib/types'
 import { STATUSES, DR_DEPARTMENTS, getJiraUrl } from '@/lib/utils'
 import {
   addWeeks, addDays, format, differenceInCalendarWeeks,
-  isSameDay,
+  isSameDay, subMonths, addMonths, startOfMonth,
 } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import {
@@ -441,6 +441,25 @@ export function DRGantt({
     monthTextRef.current.textContent = format(yearDays[i], 'yyyy년 M월', { locale: ko })
   }, [yearDays])
 
+  const scrollToMonth = useCallback((targetDate: Date) => {
+    const target = startOfMonth(targetDate)
+    const idx = yearDays.findIndex(d => d >= target)
+    if (idx < 0) return
+    const left = Math.max(0, idx * DAY_W)
+    if (tableScrollRef.current) tableScrollRef.current.scrollLeft = left
+    if (monthTextRef.current) monthTextRef.current.textContent = format(targetDate, 'yyyy년 M월', { locale: ko })
+  }, [yearDays])
+
+  const currentMonth = () => {
+    const sl = tableScrollRef.current?.scrollLeft ?? 0
+    const i  = Math.max(0, Math.min(yearDays.length - 1, Math.floor(sl / DAY_W)))
+    return startOfMonth(yearDays[i])
+  }
+
+  const goToPrev  = () => scrollToMonth(subMonths(currentMonth(), 1))
+  const goToNext  = () => scrollToMonth(addMonths(currentMonth(), 1))
+  const goToToday = () => scrollToMonth(today)
+
   /* ─ 팝업 상태 ────────────────────────────────────────────── */
   const [ganttPopup, setGanttPopup] = useState<{ id: string; dates: string[] } | null>(null)
   const [actionMenu, setActionMenu] = useState<{ rect: DOMRect; item: DrItem } | null>(null)
@@ -559,10 +578,31 @@ export function DRGantt({
         style={{ transform: 'translateY(-50%)' }}
       />
 
-      {/* 필터 바 + 현재 월 표시 */}
-      <div className="flex items-center justify-between gap-4 mb-3 flex-wrap">
-        {filterBar}
-        <span ref={monthTextRef} className="text-xs font-medium text-gray-400 whitespace-nowrap ml-auto" />
+      {/* ── STICKY ZONE ── */}
+      <div className="sticky top-0 z-50 bg-gray-50">
+        <div className="flex items-center gap-2 py-3 bg-white border-b border-gray-100">
+          <button onClick={goToPrev}
+            className="p-1.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer">
+            <ChevronLeft size={15} />
+          </button>
+          <span ref={monthTextRef}
+            className="text-sm font-semibold text-gray-700 min-w-[110px] text-center select-none">
+            {format(today, 'yyyy년 M월', { locale: ko })}
+          </span>
+          <button onClick={goToNext}
+            className="p-1.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer">
+            <ChevronRight size={15} />
+          </button>
+          <button onClick={goToToday}
+            className="px-3 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-600 ml-1 transition-colors cursor-pointer">
+            오늘
+          </button>
+          {filterBar && (
+            <div className="ml-auto flex items-center gap-2 flex-wrap">
+              {filterBar}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* 테이블 */}
