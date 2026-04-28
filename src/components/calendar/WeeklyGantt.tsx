@@ -1945,6 +1945,14 @@ export function WeeklyGantt({
                           </div>
                         )
                       })()}
+                      {/* 일자 구분선 — 흰색 1px (LTS·이름 영역 침범 방지 위해 zIndex=2) */}
+                      <div
+                        className="absolute inset-0 pointer-events-none"
+                        style={{
+                          backgroundImage: `repeating-linear-gradient(to right, transparent 0, transparent ${DAY_W - 1}px, #fff ${DAY_W - 1}px, #fff ${DAY_W}px)`,
+                          zIndex: 2,
+                        }}
+                      />
                     </td>
                   </tr>
                 )

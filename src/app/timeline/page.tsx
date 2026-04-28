@@ -52,7 +52,6 @@ export default function TimelinePage() {
   const [filterStatus,  setFilterStatus]  = useState('all')
   const [filterCat,     setFilterCat]     = useState('all')
   const [showCompleted, setShowCompleted] = useState(true)
-  const [tooltip, setTooltip] = useState<{ x: number; y: number; content: string } | null>(null)
 
   // 뷰 상태: 기본값 — 당해연도 1월부터 12개월
   const [visibleMonths, setVisibleMonths] = useState(12)
@@ -508,11 +507,6 @@ export default function TimelinePage() {
                     className="relative border-b border-gray-100 hover:bg-blue-50/40 cursor-pointer transition-colors"
                     style={{ height: 56 }}
                     onClick={() => handleProjectClick(row.project.id)}
-                    onMouseEnter={e => {
-                      const content = getProjectTooltip(row.project)
-                      if (content) setTooltip({ x: e.clientX + 14, y: e.clientY - 40, content })
-                    }}
-                    onMouseLeave={() => setTooltip(null)}
                   >
                     {vis ? (
                       <>
@@ -542,6 +536,19 @@ export default function TimelinePage() {
                         >
                           {row.project.name}
                         </div>
+                        {/* 우측 기간 라벨 (상시 노출) */}
+                        <div
+                          className="absolute pointer-events-none text-[11px] text-gray-500"
+                          style={{
+                            top: '50%',
+                            left: barRight(row.startDate!, row.endDate!) + 14,
+                            transform: 'translateY(-50%)',
+                            whiteSpace: 'nowrap',
+                            zIndex: 5,
+                          }}
+                        >
+                          {getProjectTooltip(row.project)}
+                        </div>
                       </>
                     ) : !row.startDate ? (
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[11px] text-gray-300 italic">
@@ -558,15 +565,6 @@ export default function TimelinePage() {
         )}
       </div>
 
-      {/* 호버 툴팁 */}
-      {tooltip && (
-        <div
-          className="fixed z-50 pointer-events-none bg-gray-900/90 text-white text-xs px-2.5 py-1.5 rounded-lg shadow-lg whitespace-nowrap"
-          style={{ left: tooltip.x, top: tooltip.y }}
-        >
-          {tooltip.content}
-        </div>
-      )}
     </div>
   )
 }
