@@ -119,6 +119,17 @@ export default function DashboardPage() {
 
   useEffect(() => { fetchAll() }, [fetchAll])
 
+  // 페이지 진입 시 last_seen 갱신 (Sidebar 운영 모니터링 배지 dismiss)
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user?.email) return
+      supabase.from('allowed_users')
+        .update({ last_seen_dashboard: new Date().toISOString() })
+        .eq('email', user.email)
+        .then()
+    })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   /* ── 이번주 워크로드 계산 (프로젝트 + DR) ─────── */
   const workload = useMemo(() => {
     const projectMap = new Map(projects.map(p => [p.id, p]))

@@ -161,6 +161,17 @@ export default function AdminPage() {
 
   useEffect(() => { fetchUsers() }, [fetchUsers])
 
+  // 페이지 진입 시 last_seen 갱신 (Sidebar 관리자 배지 dismiss)
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user?.email) return
+      supabase.from('allowed_users')
+        .update({ last_seen_admin: new Date().toISOString() })
+        .eq('email', user.email)
+        .then()
+    })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   /* admin 여부 */
   useEffect(() => {
     if (!myEmail || users.length === 0) return

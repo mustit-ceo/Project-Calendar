@@ -54,25 +54,58 @@ export function Sidebar() {
   }, [])
 
   // 배지 fetch 함수들 (5분 interval + 탭 활성화/포커스 시 즉시 재조회)
+  // last_seen 이후 변경된 것만 카운트 → 페이지를 한번 열면 기존은 dismiss
   const fetchDelayCount = useCallback(async () => {
-    const { data } = await supabase
+    const { data: projData } = await supabase
       .from('projects')
       .select('id, parent_id, status, start_date, end_date, lts_date, is_archived, updated_at')
       .eq('is_archived', false)
-    setDelayedCount(getDelayedProjects((data ?? []) as Project[]).length)
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+    const delayed = getDelayedProjects((projData ?? []) as Project[])
+
+    if (!userEmail || delayed.length === 0) {
+      setDelayedCount(delayed.length)
+      return
+    }
+    const { data: au } = await supabase
+      .from('allowed_users')
+      .select('last_seen_dashboard')
+      .eq('email', userEmail)
+      .maybeSingle()
+    const lastSeen = au?.last_seen_dashboard ?? null
+    if (!lastSeen) {
+      setDelayedCount(delayed.length)
+      return
+    }
+    // last_seen 이후 updated_at이 변경된 지연 프로젝트만 카운트
+    const count = delayed.filter(d => {
+      const u = d.project?.updated_at
+      return !!u && u > lastSeen
+    }).length
+    setDelayedCount(count)
+  }, [userEmail]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchPendingNewCount = useCallback(async () => {
     if (!isAdmin) return
-    const threeDaysAgo = new Date()
-    threeDaysAgo.setDate(threeDaysAgo.getDate() - 3)
+    const cutoff3d = new Date()
+    cutoff3d.setDate(cutoff3d.getDate() - 3)
+    let cutoffISO = cutoff3d.toISOString()
+    if (userEmail) {
+      const { data: au } = await supabase
+        .from('allowed_users')
+        .select('last_seen_admin')
+        .eq('email', userEmail)
+        .maybeSingle()
+      if (au?.last_seen_admin && au.last_seen_admin > cutoffISO) {
+        cutoffISO = au.last_seen_admin
+      }
+    }
     const { data } = await supabase
       .from('allowed_users')
       .select('id')
       .eq('is_active', false)
-      .gte('created_at', threeDaysAgo.toISOString())
+      .gt('created_at', cutoffISO)
     setPendingNewCount((data ?? []).length)
-  }, [isAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isAdmin, userEmail]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // 최근 3일 + last_seen 이후 신규 글 수
   const fetchRecentUxiCount = useCallback(async () => {
@@ -161,14 +194,16 @@ export function Sidebar() {
   }, [fetchDelayCount, fetchPendingNewCount, fetchRecentUxiCount, fetchRecentFeedbackCount])
 
   // 페이지 이동 시 last_seen 갱신이 끝나는 시간을 기다린 뒤 재조회
-  // (UXI LAB / 개선사항 요청 페이지 진입 직후 배지 즉시 사라지도록)
+  // (모든 배지가 페이지 진입 직후 dismiss 되도록)
   useEffect(() => {
     const t = setTimeout(() => {
+      fetchDelayCount()
+      fetchPendingNewCount()
       fetchRecentUxiCount()
       fetchRecentFeedbackCount()
     }, 800)
     return () => clearTimeout(t)
-  }, [pathname, fetchRecentUxiCount, fetchRecentFeedbackCount])
+  }, [pathname, fetchDelayCount, fetchPendingNewCount, fetchRecentUxiCount, fetchRecentFeedbackCount])
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
