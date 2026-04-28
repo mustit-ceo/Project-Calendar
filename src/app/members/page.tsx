@@ -721,9 +721,9 @@ export default function MembersPage() {
   /* (양방향 드래그 가능하도록 — 좌측에 과거, 우측에 미래) */
   useEffect(() => {
     if (loading) return
-    const t = setTimeout(() => {
+    const trySet = () => {
       const el = bodyScrollRef.current
-      if (!el) return
+      if (!el || el.clientWidth === 0) return false
       const currentIdx = periods.findIndex(p => p.isCurrent)
       const idx = currentIdx >= 0 ? currentIdx : Math.floor(periods.length / 2)
       const memberW = 200
@@ -731,8 +731,13 @@ export default function MembersPage() {
       const targetCenter = memberW + idx * periodW + periodW / 2
       const left = Math.max(0, targetCenter - el.clientWidth / 2)
       el.scrollLeft = left
-    }, 50)
-    return () => clearTimeout(t)
+      // 헤더도 같이 동기화 (onScroll 미발동 케이스 대비)
+      if (headerScrollRef.current) headerScrollRef.current.scrollLeft = left
+      return true
+    }
+    // 첫 mount 시점에 layout 완료 시점이 불확실 → 여러 시점에 재시도
+    const timers = [50, 200, 500, 1000].map(ms => setTimeout(trySet, ms))
+    return () => timers.forEach(clearTimeout)
   }, [loading, periods, viewMode, offset])
 
   /* ─ 마우스 드래그 패닝 (window 기반 — div 밖에서도 추적) ── */
