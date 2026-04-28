@@ -720,15 +720,22 @@ export default function MembersPage() {
   /* ─ 마우스 드래그 패닝 (window 기반 — div 밖에서도 추적) ── */
   const panStartRef = useRef<{ x: number; scrollLeft: number } | null>(null)
   const didPanRef   = useRef(false)
+
+  /* ─ DEBUG (임시) ── */
+  const dbgRef = useRef({ md: 0, mm: 0, mu: 0 })
+  const [, dbgTick] = useState(0)
+  useEffect(() => {
+    const id = setInterval(() => dbgTick(n => n + 1), 250)
+    return () => clearInterval(id)
+  }, [])
   const [isPanning, setIsPanning] = useState(false)
 
   const handlePanStart = (e: React.MouseEvent) => {
+    dbgRef.current.md++
     // a/input/select/textarea에서 시작한 경우만 드래그 차단
-    // (ProjectChip은 button이지만 didPanRef로 click을 막으므로 드래그 시작 허용)
     if ((e.target as HTMLElement).closest('a, input, select, textarea')) return
     if (!bodyScrollRef.current) return
 
-    // 텍스트 selection 차단 — selection이 시작되면 mousemove가 가로채짐
     e.preventDefault()
 
     panStartRef.current = {
@@ -738,6 +745,7 @@ export default function MembersPage() {
     didPanRef.current = false
 
     const onMove = (ev: MouseEvent) => {
+      dbgRef.current.mm++
       if (!panStartRef.current || !bodyScrollRef.current) return
       const dx = ev.clientX - panStartRef.current.x
       if (!didPanRef.current && Math.abs(dx) > 5) {
@@ -749,9 +757,9 @@ export default function MembersPage() {
       }
     }
     const onUp = () => {
+      dbgRef.current.mu++
       panStartRef.current = null
       setIsPanning(false)
-      // click 차단 후 다음 task에서 false 복귀
       setTimeout(() => { didPanRef.current = false }, 0)
       window.removeEventListener('mousemove', onMove)
       window.removeEventListener('mouseup', onUp)
@@ -1090,6 +1098,15 @@ export default function MembersPage() {
         </div>
       )}
 
+
+      {/* DEBUG 패널 (임시) */}
+      <div className="fixed bottom-2 right-2 bg-black/85 text-white text-xs px-3 py-2 z-[9999] font-mono leading-tight rounded shadow-lg pointer-events-none">
+        <div>md:{dbgRef.current.md} mm:{dbgRef.current.mm} mu:{dbgRef.current.mu}</div>
+        <div>panning:{String(isPanning)}</div>
+        <div>scrollL:{bodyScrollRef.current?.scrollLeft ?? '?'}</div>
+        <div>scrollW:{bodyScrollRef.current?.scrollWidth ?? '?'}</div>
+        <div>clientW:{bodyScrollRef.current?.clientWidth ?? '?'}</div>
+      </div>
 
       {/* 멤버 설정 모달 */}
       {showSettings && (
