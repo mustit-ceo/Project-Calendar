@@ -101,8 +101,8 @@ function generatePeriods(mode: ViewMode, offset: number): Period[] {
   const today = new Date(); today.setHours(0, 0, 0, 0)
 
   if (mode === 'week') {
-    // 기본(offset=0): 지난주부터 4주 표시. 버튼 클릭 시 1주씩 이동
-    const baseMonday = addWeeks(getMondayOfWeek(today), -1 + offset)
+    // 기본(offset=0): 3주 전부터 12주 표시 (현재가 화면 중앙 부근, 양방향 드래그 가능)
+    const baseMonday = addWeeks(getMondayOfWeek(today), -3 + offset)
     return Array.from({ length: 12 }, (_, i) => {
       const mon = addWeeks(baseMonday, i)
       const fri = addDays(mon, 4)
@@ -119,8 +119,8 @@ function generatePeriods(mode: ViewMode, offset: number): Period[] {
   }
 
   if (mode === 'month') {
-    // 기본(offset=0): 지난달부터 3개월 표시. 버튼 클릭 시 1달씩 이동
-    const baseMonth = addMonths(startOfMonth(today), -1 + offset)
+    // 기본(offset=0): 3개월 전부터 12개월 표시 (현재가 화면 중앙 부근)
+    const baseMonth = addMonths(startOfMonth(today), -3 + offset)
     return Array.from({ length: 12 }, (_, i) => {
       const m    = addMonths(baseMonth, i)
       const mEnd = endOfMonth(m)
@@ -135,8 +135,8 @@ function generatePeriods(mode: ViewMode, offset: number): Period[] {
     })
   }
 
-  // day: 기본(offset=0): 어제부터 12 평일 표시. 토/일 제외. 버튼 클릭 시 1 평일씩 이동
-  const baseDayRaw = toWeekday(addDays(today, -1))
+  // day: 기본(offset=0): 3 평일 전부터 12 평일 표시 (현재가 화면 중앙 부근)
+  const baseDayRaw = addWeekdays(toWeekday(today), -3)
   const baseDay    = addWeekdays(baseDayRaw, offset)
 
   const weekdays: Date[] = []
