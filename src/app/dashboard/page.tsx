@@ -13,8 +13,8 @@ import {
 import Link from 'next/link'
 
 /* ── 임계치 (프로젝트와 DR 별도) ───────────────────────── */
-// 프로젝트: 정상 1 / 노란 2~3 / 주의 4~5 / 과부하 6+
-const PROJ_TH = { g: 1, y: 3, r: 5 } as const
+// 프로젝트: 정상 1~2 / 노란 3~4 / 주의 5~6 / 과부하 7+
+const PROJ_TH = { g: 2, y: 4, r: 6 } as const
 // DR: 정상 1~3 / 노란 4~5 / 주의 6~7 / 과부하 8+
 const DR_TH = { g: 3, y: 5, r: 7 } as const
 
@@ -347,11 +347,11 @@ function WorkloadColumn({
 
       {/* 임계치별 요약 */}
       <div className="flex items-center gap-1.5 mb-3 flex-wrap">
-        <SummaryChip bg="#7f1d1d" fg="#ffffff" label={`과 ${thresholds.r + 1}+`}                      value={counts.overload} />
-        <SummaryChip bg="#fecaca" fg="#991b1b" label={`주 ${thresholds.y + 1}~${thresholds.r}`}        value={counts.red}      />
-        <SummaryChip bg="#fef08a" fg="#854d0e" label={`노 ${thresholds.g + 1}~${thresholds.y}`}        value={counts.yellow}   />
-        <SummaryChip bg="#bbf7d0" fg="#166534" label={`정 1${thresholds.g > 1 ? `~${thresholds.g}` : ''}`} value={counts.green} />
-        <SummaryChip bg="#f3f4f6" fg="#6b7280" label="없음"                                            value={empty.length}    />
+        <SummaryChip bg="#7f1d1d" fg="#ffffff" label={`과부하 ${thresholds.r + 1}+`}                      value={counts.overload} />
+        <SummaryChip bg="#fecaca" fg="#991b1b" label={`주의 ${thresholds.y + 1}~${thresholds.r}`}          value={counts.red}      />
+        <SummaryChip bg="#fef08a" fg="#854d0e" label={`노란 ${thresholds.g + 1}~${thresholds.y}`}          value={counts.yellow}   />
+        <SummaryChip bg="#bbf7d0" fg="#166534" label={`정상 1${thresholds.g > 1 ? `~${thresholds.g}` : ''}`} value={counts.green}    />
+        <SummaryChip bg="#f3f4f6" fg="#6b7280" label="없음"                                                value={empty.length}    />
       </div>
 
       {/* 멤버 행 */}
