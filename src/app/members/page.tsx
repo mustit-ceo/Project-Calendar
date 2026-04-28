@@ -321,11 +321,20 @@ function MemberSettingModal({ members, onChange, onClose }: SettingModalProps) {
     await supabase.from('team_members').update({ is_active: next.is_active }).eq('id', m.id)
   }
 
-  /* 리더 토글 */
+  /* 리더 토글 — DB update 실패 시 옵티미스틱 rollback */
   const handleLeaderToggle = async (m: TeamMember) => {
     const next = { ...m, is_leader: !m.is_leader }
     onChange(members.map(x => x.id === m.id ? next : x))
-    await supabase.from('team_members').update({ is_leader: next.is_leader }).eq('id', m.id)
+    const { error } = await supabase
+      .from('team_members')
+      .update({ is_leader: next.is_leader })
+      .eq('id', m.id)
+    if (error) {
+      console.error('[leader] update error:', error)
+      // rollback
+      onChange(members.map(x => x.id === m.id ? m : x))
+      alert(`리더 설정 실패: ${error.message}`)
+    }
   }
 
   /* 편집 시작 */
@@ -714,8 +723,9 @@ export default function MembersPage() {
   const [isPanning, setIsPanning] = useState(false)
 
   const handlePanStart = (e: React.MouseEvent) => {
-    // 클릭 가능 자식(ProjectChip 등 button/a/input)에서 시작한 경우 드래그 차단
-    if ((e.target as HTMLElement).closest('button, a, input, select')) return
+    // a/input/select/textarea에서 시작한 경우만 드래그 차단
+    // (ProjectChip은 button이지만 didPanRef로 click을 막으므로 드래그 시작 허용)
+    if ((e.target as HTMLElement).closest('a, input, select, textarea')) return
     panStartRef.current = {
       x: e.clientX,
       scrollLeft: bodyScrollRef.current?.scrollLeft ?? 0,
