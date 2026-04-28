@@ -430,7 +430,7 @@ export default function TimelinePage() {
         onMouseUp={handleDragEnd}
         onMouseLeave={handleDragEnd}
       >
-        <DragHint />
+        <DragHint style={{ top: '50%', transform: 'translate(-50%, -50%)' }} />
         {rows.length === 0 ? (
           <div className="flex items-center justify-center h-64 text-gray-400 text-sm">
             표시할 프로젝트가 없습니다
