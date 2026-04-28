@@ -53,11 +53,11 @@ export default function TimelinePage() {
   const [filterCat,     setFilterCat]     = useState('all')
   const [showCompleted, setShowCompleted] = useState(true)
 
-  // 뷰 상태: 기본값 — 당해연도 1월부터 12개월
+  // 뷰 상태: 기본값 — 12개월, 현재월이 중앙에 오도록 (현재월 - 6개월부터)
   const [visibleMonths, setVisibleMonths] = useState(12)
   const [viewStartDate, setViewStartDate] = useState<Date>(() => {
     const now = new Date()
-    return new Date(now.getFullYear(), 0, 1)
+    return new Date(now.getFullYear(), now.getMonth() - 6, 1)
   })
 
   // ── 드래그 패닝 ──

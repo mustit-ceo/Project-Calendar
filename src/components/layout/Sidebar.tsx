@@ -29,6 +29,7 @@ export function Sidebar() {
   const [userAvatar, setUserAvatar] = useState<string | null>(null)
   const [isAdmin,    setIsAdmin]    = useState(false)
   const [delayedCount, setDelayedCount] = useState(0)
+  const [pendingNewCount, setPendingNewCount] = useState(0)
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
@@ -65,6 +66,26 @@ export function Sidebar() {
     fetchDelayCount()
     // 5분마다 재조회
     const t = setInterval(fetchDelayCount, 5 * 60 * 1000)
+    return () => { cancelled = true; clearInterval(t) }
+  }, [isAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 신규 가입 카운트 (관리자 메뉴 배지) — 최근 3일 이내 + 미활성
+  useEffect(() => {
+    if (!isAdmin) return
+    let cancelled = false
+    const fetchPendingNewCount = async () => {
+      const threeDaysAgo = new Date()
+      threeDaysAgo.setDate(threeDaysAgo.getDate() - 3)
+      const { data } = await supabase
+        .from('allowed_users')
+        .select('id')
+        .eq('is_active', false)
+        .gte('created_at', threeDaysAgo.toISOString())
+      if (cancelled) return
+      setPendingNewCount((data ?? []).length)
+    }
+    fetchPendingNewCount()
+    const t = setInterval(fetchPendingNewCount, 5 * 60 * 1000)
     return () => { cancelled = true; clearInterval(t) }
   }, [isAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -132,9 +153,9 @@ export function Sidebar() {
             {collapsed && <div className="my-2 border-t border-gray-700" />}
             <Link
               href="/admin"
-              title={collapsed ? '관리자' : undefined}
+              title={collapsed ? `관리자${pendingNewCount > 0 ? ` · 신규 ${pendingNewCount}` : ''}` : undefined}
               className={cn(
-                'flex items-center rounded-lg text-sm font-medium transition-colors',
+                'flex items-center rounded-lg text-sm font-medium transition-colors relative',
                 collapsed ? 'justify-center px-0 py-2.5' : 'gap-3 px-3 py-2.5',
                 pathname === '/admin' || pathname.startsWith('/admin/')
                   ? 'bg-indigo-600 text-white'
@@ -142,7 +163,19 @@ export function Sidebar() {
               )}
             >
               <ShieldCheck size={18} className="flex-shrink-0" />
-              {!collapsed && '관리자'}
+              {!collapsed && (
+                <>
+                  <span className="flex-1">관리자</span>
+                  {pendingNewCount > 0 && (
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-500 text-white">
+                      {pendingNewCount}
+                    </span>
+                  )}
+                </>
+              )}
+              {collapsed && pendingNewCount > 0 && (
+                <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-red-500" />
+              )}
             </Link>
             {/* 대시보드 — 관리자에게만 노출 */}
             <Link
