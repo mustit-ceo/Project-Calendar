@@ -216,10 +216,11 @@ export default function TimelinePage() {
   }, [rows, viewStartDate, viewEndDate])
 
   // 줌 변경 시 뷰 시작 월 재계산
-  // 모든 줌 레벨에서 좌측은 당해연도 1월 고정
-  function calcViewStart(_months: number): Date {
+  // 모든 줌 레벨에서 현재월이 중앙에 오도록 (기본값 조건 유지)
+  function calcViewStart(months: number): Date {
     const now = new Date()
-    return new Date(now.getFullYear(), 0, 1)
+    const offset = Math.floor(months / 2)
+    return new Date(now.getFullYear(), now.getMonth() - offset, 1)
   }
 
   function zoomIn() {
