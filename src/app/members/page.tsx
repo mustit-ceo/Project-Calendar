@@ -717,7 +717,7 @@ export default function MembersPage() {
     }
   }, [])
 
-  /* ─ 마우스 드래그 패닝 ── */
+  /* ─ 마우스 드래그 패닝 (window 기반 — div 밖에서도 추적) ── */
   const panStartRef = useRef<{ x: number; scrollLeft: number } | null>(null)
   const didPanRef   = useRef(false)
   const [isPanning, setIsPanning] = useState(false)
@@ -726,28 +726,35 @@ export default function MembersPage() {
     // a/input/select/textarea에서 시작한 경우만 드래그 차단
     // (ProjectChip은 button이지만 didPanRef로 click을 막으므로 드래그 시작 허용)
     if ((e.target as HTMLElement).closest('a, input, select, textarea')) return
+    if (!bodyScrollRef.current) return
+
     panStartRef.current = {
       x: e.clientX,
-      scrollLeft: bodyScrollRef.current?.scrollLeft ?? 0,
+      scrollLeft: bodyScrollRef.current.scrollLeft,
     }
     didPanRef.current = false
-  }
-  const handlePanMove = (e: React.MouseEvent) => {
-    if (!panStartRef.current || !bodyScrollRef.current) return
-    const dx = e.clientX - panStartRef.current.x
-    if (!didPanRef.current && Math.abs(dx) > 5) {
-      setIsPanning(true)
-      didPanRef.current = true
+
+    const onMove = (ev: MouseEvent) => {
+      if (!panStartRef.current || !bodyScrollRef.current) return
+      const dx = ev.clientX - panStartRef.current.x
+      if (!didPanRef.current && Math.abs(dx) > 5) {
+        setIsPanning(true)
+        didPanRef.current = true
+      }
+      if (didPanRef.current) {
+        bodyScrollRef.current.scrollLeft = panStartRef.current.scrollLeft - dx
+      }
     }
-    if (didPanRef.current) {
-      bodyScrollRef.current.scrollLeft = panStartRef.current.scrollLeft - dx
+    const onUp = () => {
+      panStartRef.current = null
+      setIsPanning(false)
+      // click 차단 후 다음 task에서 false 복귀
+      setTimeout(() => { didPanRef.current = false }, 0)
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
     }
-  }
-  const handlePanEnd = () => {
-    panStartRef.current = null
-    setIsPanning(false)
-    // 다음 click 한 번은 didPanRef=true로 무시 → click 처리 후 false 복귀
-    setTimeout(() => { didPanRef.current = false }, 0)
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
   }
 
   /* ─ 헤더 기간 라벨 ──────────────────────────── */
@@ -952,9 +959,6 @@ export default function MembersPage() {
             }}
             onScroll={syncHeaderScroll}
             onMouseDown={handlePanStart}
-            onMouseMove={handlePanMove}
-            onMouseUp={handlePanEnd}
-            onMouseLeave={handlePanEnd}
           >
           <div style={{ minWidth: 200 + periods.length * 250 }}>
 
