@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { DEPARTMENTS } from '@/lib/utils'
 import { DeptBadge } from '@/components/ui/DeptBadge'
+import { DragHint } from '@/components/ui/DragHint'
 
 /* ── 타입 ──────────────────────────────────────── */
 type ViewMode = 'day' | 'week' | 'month'
@@ -262,16 +263,22 @@ function MemberAvatar({ member, size = 36 }: { member: TeamMember; size?: number
 
 /* ── ProjectChip ───────────────────────────────── */
 function ProjectChip({
-  id, name, parentName, kind,
+  id, name, parentName, kind, didPanRef,
 }: {
   id: string; name: string; parentName?: string | null; kind?: 'project' | 'dr'
+  didPanRef: React.MutableRefObject<boolean>
 }) {
   const router = useRouter()
   const isDR = kind === 'dr'
   return (
-    <div
-      className="flex flex-col px-2 py-1 mb-1 bg-white border border-gray-100 rounded-lg shadow-sm min-w-0 cursor-pointer hover:border-blue-300 hover:bg-blue-50/40 transition-colors"
-      onClick={() => router.push(`/calendar?task=${id}${isDR ? '&tab=dr' : ''}`)}
+    <button
+      type="button"
+      className="w-full text-left flex flex-col px-2 py-1 mb-1 bg-white border border-gray-100 rounded-lg shadow-sm min-w-0 cursor-pointer hover:border-blue-300 hover:bg-blue-50/40 transition-colors"
+      onClick={() => {
+        // 드래그 직후의 클릭은 무시 (드래그로 끝난 동작)
+        if (didPanRef.current) return
+        router.push(`/calendar?task=${id}${isDR ? '&tab=dr' : ''}`)
+      }}
       title="캘린더에서 보기"
     >
       {parentName && (
@@ -290,7 +297,7 @@ function ProjectChip({
           {name}
         </span>
       </div>
-    </div>
+    </button>
   )
 }
 
@@ -701,6 +708,38 @@ export default function MembersPage() {
     }
   }, [])
 
+  /* ─ 마우스 드래그 패닝 ── */
+  const panStartRef = useRef<{ x: number; scrollLeft: number } | null>(null)
+  const didPanRef   = useRef(false)
+  const [isPanning, setIsPanning] = useState(false)
+
+  const handlePanStart = (e: React.MouseEvent) => {
+    // 클릭 가능 자식(ProjectChip 등 button/a/input)에서 시작한 경우 드래그 차단
+    if ((e.target as HTMLElement).closest('button, a, input, select')) return
+    panStartRef.current = {
+      x: e.clientX,
+      scrollLeft: bodyScrollRef.current?.scrollLeft ?? 0,
+    }
+    didPanRef.current = false
+  }
+  const handlePanMove = (e: React.MouseEvent) => {
+    if (!panStartRef.current || !bodyScrollRef.current) return
+    const dx = e.clientX - panStartRef.current.x
+    if (!didPanRef.current && Math.abs(dx) > 5) {
+      setIsPanning(true)
+      didPanRef.current = true
+    }
+    if (didPanRef.current) {
+      bodyScrollRef.current.scrollLeft = panStartRef.current.scrollLeft - dx
+    }
+  }
+  const handlePanEnd = () => {
+    panStartRef.current = null
+    setIsPanning(false)
+    // 다음 click 한 번은 didPanRef=true로 무시 → click 처리 후 false 복귀
+    setTimeout(() => { didPanRef.current = false }, 0)
+  }
+
   /* ─ 헤더 기간 라벨 ──────────────────────────── */
   const periodRangeLabel = useMemo(() => {
     if (!periods.length) return ''
@@ -891,11 +930,21 @@ export default function MembersPage() {
             </div>
           </div>
 
-          {/* ── 스크롤 바디 ── */}
+          {/* ── 스크롤 바디 (마우스 드래그 이동) ── */}
+          <div className="relative">
+            <DragHint />
           <div
             ref={bodyScrollRef}
-            style={{ overflowX: 'auto' }}
+            style={{
+              overflowX: 'auto',
+              cursor: isPanning ? 'grabbing' : 'grab',
+              userSelect: isPanning ? 'none' : 'auto',
+            }}
             onScroll={syncHeaderScroll}
+            onMouseDown={handlePanStart}
+            onMouseMove={handlePanMove}
+            onMouseUp={handlePanEnd}
+            onMouseLeave={handlePanEnd}
           >
           <div style={{ minWidth: 200 + periods.length * 250 }}>
 
@@ -970,6 +1019,7 @@ export default function MembersPage() {
                                 name={item.name}
                                 parentName={item.parentName}
                                 kind="project"
+                                didPanRef={didPanRef}
                               />
                             ))}
                             {drChips.length > 0 && projectChips.length > 0 && (
@@ -982,6 +1032,7 @@ export default function MembersPage() {
                                 name={item.name}
                                 parentName={item.parentName}
                                 kind="dr"
+                                didPanRef={didPanRef}
                               />
                             ))}
                           </>
@@ -1016,6 +1067,7 @@ export default function MembersPage() {
                 </span>
               </div>
             )}
+          </div>
           </div>
           </div>
         </div>
