@@ -728,6 +728,9 @@ export default function MembersPage() {
     if ((e.target as HTMLElement).closest('a, input, select, textarea')) return
     if (!bodyScrollRef.current) return
 
+    // 텍스트 selection 차단 — selection이 시작되면 mousemove가 가로채짐
+    e.preventDefault()
+
     panStartRef.current = {
       x: e.clientX,
       scrollLeft: bodyScrollRef.current.scrollLeft,
@@ -952,10 +955,10 @@ export default function MembersPage() {
             <DragHint />
           <div
             ref={bodyScrollRef}
+            className="select-none"
             style={{
               overflowX: 'auto',
               cursor: isPanning ? 'grabbing' : 'grab',
-              userSelect: isPanning ? 'none' : 'auto',
             }}
             onScroll={syncHeaderScroll}
             onMouseDown={handlePanStart}
