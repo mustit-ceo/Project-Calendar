@@ -99,6 +99,17 @@ export default function FeedbackPage() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
+  // 페이지 진입 시 last_seen 갱신 (Sidebar 신규 배지 dismiss)
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user?.email) return
+      supabase.from('allowed_users')
+        .update({ last_seen_feedback: new Date().toISOString() })
+        .eq('email', user.email)
+        .then()
+    })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   /* 코멘트 추가 */
   async function addComment(requestId: string, text: string) {
     const trimmed = text.trim()

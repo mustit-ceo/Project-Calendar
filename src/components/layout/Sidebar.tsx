@@ -74,25 +74,48 @@ export function Sidebar() {
     setPendingNewCount((data ?? []).length)
   }, [isAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // 최근 3일 + last_seen 이후 신규 글 수
   const fetchRecentUxiCount = useCallback(async () => {
-    const dayAgo = new Date()
-    dayAgo.setHours(dayAgo.getHours() - 24)
+    const cutoff3d = new Date()
+    cutoff3d.setDate(cutoff3d.getDate() - 3)
+    let cutoffISO = cutoff3d.toISOString()
+    if (userEmail) {
+      const { data: au } = await supabase
+        .from('allowed_users')
+        .select('last_seen_uxi_lab')
+        .eq('email', userEmail)
+        .maybeSingle()
+      if (au?.last_seen_uxi_lab && au.last_seen_uxi_lab > cutoffISO) {
+        cutoffISO = au.last_seen_uxi_lab
+      }
+    }
     const { data } = await supabase
       .from('uxi_lab')
       .select('id')
-      .gte('created_at', dayAgo.toISOString())
+      .gt('created_at', cutoffISO)
     setRecentUxiCount((data ?? []).length)
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [userEmail]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchRecentFeedbackCount = useCallback(async () => {
-    const dayAgo = new Date()
-    dayAgo.setHours(dayAgo.getHours() - 24)
+    const cutoff3d = new Date()
+    cutoff3d.setDate(cutoff3d.getDate() - 3)
+    let cutoffISO = cutoff3d.toISOString()
+    if (userEmail) {
+      const { data: au } = await supabase
+        .from('allowed_users')
+        .select('last_seen_feedback')
+        .eq('email', userEmail)
+        .maybeSingle()
+      if (au?.last_seen_feedback && au.last_seen_feedback > cutoffISO) {
+        cutoffISO = au.last_seen_feedback
+      }
+    }
     const { data } = await supabase
       .from('improvement_requests')
       .select('id')
-      .gte('created_at', dayAgo.toISOString())
+      .gt('created_at', cutoffISO)
     setRecentFeedbackCount((data ?? []).length)
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [userEmail]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // 5분마다 재조회 (백그라운드 안전망)
   useEffect(() => {
@@ -136,6 +159,16 @@ export function Sidebar() {
       window.removeEventListener('focus', refresh)
     }
   }, [fetchDelayCount, fetchPendingNewCount, fetchRecentUxiCount, fetchRecentFeedbackCount])
+
+  // 페이지 이동 시 last_seen 갱신이 끝나는 시간을 기다린 뒤 재조회
+  // (UXI LAB / 개선사항 요청 페이지 진입 직후 배지 즉시 사라지도록)
+  useEffect(() => {
+    const t = setTimeout(() => {
+      fetchRecentUxiCount()
+      fetchRecentFeedbackCount()
+    }, 800)
+    return () => clearTimeout(t)
+  }, [pathname, fetchRecentUxiCount, fetchRecentFeedbackCount])
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
