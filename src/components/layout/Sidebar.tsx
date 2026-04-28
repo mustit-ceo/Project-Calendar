@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { Calendar, Users, CheckSquare, Rocket, Lightbulb, LogOut, ChevronLeft, ChevronRight, ShieldCheck, BarChart2, ClipboardList, MessageSquarePlus, LayoutDashboard } from 'lucide-react'
 import { cn, getDelayedProjects } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Project } from '@/lib/types'
 
 const navItems = [
@@ -29,8 +29,10 @@ export function Sidebar() {
   const [userName,   setUserName]   = useState<string | null>(null)
   const [userAvatar, setUserAvatar] = useState<string | null>(null)
   const [isAdmin,    setIsAdmin]    = useState(false)
-  const [delayedCount, setDelayedCount] = useState(0)
-  const [pendingNewCount, setPendingNewCount] = useState(0)
+  const [delayedCount,        setDelayedCount]        = useState(0)
+  const [pendingNewCount,     setPendingNewCount]     = useState(0)
+  const [recentUxiCount,      setRecentUxiCount]      = useState(0)
+  const [recentFeedbackCount, setRecentFeedbackCount] = useState(0)
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
@@ -51,43 +53,89 @@ export function Sidebar() {
     })
   }, [])
 
-  // 지연 항목 카운트 (운영 모니터링 배지) — 전체 사용자 노출
-  useEffect(() => {
-    let cancelled = false
-    const fetchDelayCount = async () => {
-      const { data } = await supabase
-        .from('projects')
-        .select('id, parent_id, status, start_date, end_date, lts_date, is_archived, updated_at')
-        .eq('is_archived', false)
-      if (cancelled) return
-      const count = getDelayedProjects((data ?? []) as Project[]).length
-      setDelayedCount(count)
-    }
-    fetchDelayCount()
-    // 5분마다 재조회
-    const t = setInterval(fetchDelayCount, 5 * 60 * 1000)
-    return () => { cancelled = true; clearInterval(t) }
+  // 배지 fetch 함수들 (5분 interval + 탭 활성화/포커스 시 즉시 재조회)
+  const fetchDelayCount = useCallback(async () => {
+    const { data } = await supabase
+      .from('projects')
+      .select('id, parent_id, status, start_date, end_date, lts_date, is_archived, updated_at')
+      .eq('is_archived', false)
+    setDelayedCount(getDelayedProjects((data ?? []) as Project[]).length)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 신규 가입 카운트 (관리자 메뉴 배지) — 최근 3일 이내 + 미활성
-  useEffect(() => {
+  const fetchPendingNewCount = useCallback(async () => {
     if (!isAdmin) return
-    let cancelled = false
-    const fetchPendingNewCount = async () => {
-      const threeDaysAgo = new Date()
-      threeDaysAgo.setDate(threeDaysAgo.getDate() - 3)
-      const { data } = await supabase
-        .from('allowed_users')
-        .select('id')
-        .eq('is_active', false)
-        .gte('created_at', threeDaysAgo.toISOString())
-      if (cancelled) return
-      setPendingNewCount((data ?? []).length)
-    }
+    const threeDaysAgo = new Date()
+    threeDaysAgo.setDate(threeDaysAgo.getDate() - 3)
+    const { data } = await supabase
+      .from('allowed_users')
+      .select('id')
+      .eq('is_active', false)
+      .gte('created_at', threeDaysAgo.toISOString())
+    setPendingNewCount((data ?? []).length)
+  }, [isAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const fetchRecentUxiCount = useCallback(async () => {
+    const dayAgo = new Date()
+    dayAgo.setHours(dayAgo.getHours() - 24)
+    const { data } = await supabase
+      .from('uxi_lab')
+      .select('id')
+      .gte('created_at', dayAgo.toISOString())
+    setRecentUxiCount((data ?? []).length)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const fetchRecentFeedbackCount = useCallback(async () => {
+    const dayAgo = new Date()
+    dayAgo.setHours(dayAgo.getHours() - 24)
+    const { data } = await supabase
+      .from('improvement_requests')
+      .select('id')
+      .gte('created_at', dayAgo.toISOString())
+    setRecentFeedbackCount((data ?? []).length)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 5분마다 재조회 (백그라운드 안전망)
+  useEffect(() => {
+    fetchDelayCount()
+    const t = setInterval(fetchDelayCount, 5 * 60 * 1000)
+    return () => clearInterval(t)
+  }, [fetchDelayCount])
+
+  useEffect(() => {
+    if (!isAdmin) { setPendingNewCount(0); return }
     fetchPendingNewCount()
     const t = setInterval(fetchPendingNewCount, 5 * 60 * 1000)
-    return () => { cancelled = true; clearInterval(t) }
-  }, [isAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
+    return () => clearInterval(t)
+  }, [fetchPendingNewCount, isAdmin])
+
+  useEffect(() => {
+    fetchRecentUxiCount()
+    const t = setInterval(fetchRecentUxiCount, 5 * 60 * 1000)
+    return () => clearInterval(t)
+  }, [fetchRecentUxiCount])
+
+  useEffect(() => {
+    fetchRecentFeedbackCount()
+    const t = setInterval(fetchRecentFeedbackCount, 5 * 60 * 1000)
+    return () => clearInterval(t)
+  }, [fetchRecentFeedbackCount])
+
+  // 탭 활성화·창 포커스 시 즉시 재조회 (서버 부하 거의 없음, 즉각 반영)
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState !== 'visible') return
+      fetchDelayCount()
+      fetchPendingNewCount()
+      fetchRecentUxiCount()
+      fetchRecentFeedbackCount()
+    }
+    document.addEventListener('visibilitychange', refresh)
+    window.addEventListener('focus', refresh)
+    return () => {
+      document.removeEventListener('visibilitychange', refresh)
+      window.removeEventListener('focus', refresh)
+    }
+  }, [fetchDelayCount, fetchPendingNewCount, fetchRecentUxiCount, fetchRecentFeedbackCount])
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
@@ -122,13 +170,19 @@ export function Sidebar() {
       {/* 네비게이션 */}
       <nav className={cn('flex-1 py-4 space-y-1 overflow-y-auto', collapsed ? 'px-1' : 'px-3')}>
         {navItems.map(({ href, label, icon: Icon }) => {
-          const active    = pathname === href || pathname.startsWith(href + '/')
-          const showBadge = href === '/dashboard' && delayedCount > 0
+          const active = pathname === href || pathname.startsWith(href + '/')
+          // 메뉴별 배지 카운트
+          let badgeCount = 0
+          let badgeLabel = ''
+          if (href === '/dashboard')      { badgeCount = delayedCount;        badgeLabel = '주의' }
+          else if (href === '/uxi-lab')   { badgeCount = recentUxiCount;      badgeLabel = '신규' }
+          else if (href === '/feedback')  { badgeCount = recentFeedbackCount; badgeLabel = '신규' }
+          const showBadge = badgeCount > 0
           return (
             <Link
               key={href}
               href={href}
-              title={collapsed ? `${label}${showBadge ? ` · 주의 ${delayedCount}` : ''}` : undefined}
+              title={collapsed ? `${label}${showBadge ? ` · ${badgeLabel} ${badgeCount}` : ''}` : undefined}
               className={cn(
                 'flex items-center rounded-lg text-sm font-medium transition-colors relative',
                 collapsed ? 'justify-center px-0 py-2.5' : 'gap-3 px-3 py-2.5',
@@ -143,7 +197,7 @@ export function Sidebar() {
                   <span className="flex-1">{label}</span>
                   {showBadge && (
                     <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-500 text-white">
-                      {delayedCount}
+                      {badgeCount}
                     </span>
                   )}
                 </>
