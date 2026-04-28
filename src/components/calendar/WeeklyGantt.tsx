@@ -3,6 +3,7 @@
 import { useRef, useState, useMemo, useEffect, useCallback } from 'react'
 import { Project, TaskProgress, Status, Department, TeamMember } from '@/lib/types'
 import { DeptBadge } from '@/components/ui/DeptBadge'
+import { DragHint } from '@/components/ui/DragHint'
 import { getJiraUrl, buildProjectTree, STATUSES, DEPARTMENTS } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import {
@@ -746,13 +747,6 @@ export function WeeklyGantt({
     }, 400)
     return () => clearTimeout(timer)
   }, [highlightId, projects])
-
-  /* ─ 드래그 힌트 오버레이: 최초 3초간 표시 ── */
-  const [showDragHint, setShowDragHint] = useState(true)
-  useEffect(() => {
-    const t = setTimeout(() => setShowDragHint(false), 3000)
-    return () => clearTimeout(t)
-  }, [])
 
   /* ─ 행 액션 메뉴 ── */
   type ActionMenu = { projectId: string; depth: number; canAddChild: boolean; rect: DOMRect }
@@ -1552,40 +1546,8 @@ export function WeeklyGantt({
 
       {/* ── BODY ────────────────────────────────── */}
       <div className="relative">
-        {/* 드래그 힌트 오버레이 — 최초 3초 후 페이드아웃 */}
-        <div
-          style={{
-            position: 'absolute',
-            top: 16,
-            left: `calc(50% + ${totalFixedW / 2}px)`,
-            transform: 'translateX(-50%)',
-            zIndex: 9999,
-            pointerEvents: 'none',
-            opacity: showDragHint ? 1 : 0,
-            transition: 'opacity 0.8s ease-out',
-          }}
-        >
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            padding: '10px 22px',
-            borderRadius: 20,
-            backgroundColor: 'rgba(17, 24, 39, 0.7)',
-            color: '#fff',
-            fontSize: 14,
-            fontWeight: 500,
-            boxShadow: '0 8px 32px rgba(0,0,0,0.28)',
-            backdropFilter: 'blur(6px)',
-            userSelect: 'none',
-            whiteSpace: 'nowrap',
-          }}>
-            <svg width="20" height="14" viewBox="0 0 14 10" fill="none" style={{ opacity: 0.85 }}>
-              <path d="M1 5h12M1 5l3-3M1 5l3 3M13 5l-3-3M13 5l-3 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-            </svg>
-            드래그로 이동
-          </div>
-        </div>
+        {/* 드래그 힌트 오버레이 — 3초 후 페이드아웃 */}
+        <DragHint style={{ left: `calc(50% + ${totalFixedW / 2}px)` }} />
         <div className="absolute top-0 bottom-0 z-40 pointer-events-none"
           style={{ left: totalFixedW, width: 14, background: 'linear-gradient(to right, rgba(0,0,0,0.07), transparent)' }}
         />

@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Project, TaskProgress, Status } from '@/lib/types'
 import { PROJECT_CATEGORIES } from '@/lib/utils'
 import { RefreshCw, ZoomIn, ZoomOut } from 'lucide-react'
+import { DragHint } from '@/components/ui/DragHint'
 
 const STATUS_COLOR: Record<Status, { line: string; bg: string; text: string; dot: string }> = {
   '완료': { line: '#1a1a1a', bg: '#f0f0f0', text: '#1a1a1a', dot: '#1a1a1a' },
@@ -423,12 +424,13 @@ export default function TimelinePage() {
       {/* ── 타임라인 ── */}
       <div
         ref={timelineRef}
-        className="flex-1 overflow-y-auto overflow-x-hidden select-none timeline-drag-area"
+        className="flex-1 overflow-y-auto overflow-x-hidden select-none timeline-drag-area relative"
         onMouseDown={handleDragStart}
         onMouseMove={handleDragMove}
         onMouseUp={handleDragEnd}
         onMouseLeave={handleDragEnd}
       >
+        <DragHint />
         {rows.length === 0 ? (
           <div className="flex items-center justify-center h-64 text-gray-400 text-sm">
             표시할 프로젝트가 없습니다

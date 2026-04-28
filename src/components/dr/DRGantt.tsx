@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { DrItem, DrProgress, Status, Department, TeamMember } from '@/lib/types'
 import { DR_DEPARTMENTS, getJiraUrl } from '@/lib/utils'
 import { DeptBadge } from '@/components/ui/DeptBadge'
+import { DragHint } from '@/components/ui/DragHint'
 import {
   addWeeks, addDays, format, differenceInCalendarWeeks,
   isSameDay, subMonths, addMonths, startOfMonth, getISOWeek,
@@ -805,7 +806,9 @@ export function DRGantt({
         </div>
       </div>
 
-      {/* 테이블 */}
+      {/* 테이블 (드래그 힌트 포함) */}
+      <div className="relative">
+        <DragHint style={{ left: `calc(50% + ${totalFixedW / 2}px)` }} />
       <div
         ref={tableScrollRef}
         className="overflow-x-auto select-none border border-gray-200 rounded-xl"
@@ -1117,6 +1120,7 @@ export function DRGantt({
             })}
           </tbody>
         </table>
+      </div>
       </div>
 
       {/* ── 간트 날짜 팝업 ── */}
