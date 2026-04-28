@@ -541,7 +541,7 @@ export default function TimelinePage() {
                           className="absolute pointer-events-none text-[11px] text-gray-500"
                           style={{
                             top: '50%',
-                            left: barRight(row.startDate!, row.endDate!) + 14,
+                            left: `calc(${barRight(row.startDate!, row.endDate!)} + 14px)`,
                             transform: 'translateY(-50%)',
                             whiteSpace: 'nowrap',
                             zIndex: 5,
