@@ -86,21 +86,6 @@ export default function DashboardPage() {
   const [drItems,   setDrItems]   = useState<DrItem[]>([])
   const [drProgress, setDrProgress] = useState<DrProgress[]>([])
   const [loading,   setLoading]   = useState(true)
-  // null = 확인 중 / true = 관리자 / false = 권한 없음
-  const [isAdmin, setIsAdmin] = useState<boolean | null>(null)
-
-  // 관리자 권한 체크 (URL 직접 접근 차단)
-  useEffect(() => {
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
-      if (!user?.email) { setIsAdmin(false); return }
-      const { data } = await supabase
-        .from('allowed_users')
-        .select('role, is_active')
-        .eq('email', user.email)
-        .maybeSingle()
-      setIsAdmin(data?.role === 'admin' && data?.is_active === true)
-    })
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const today = useMemo(() => new Date(), [])
   const weekRange = useMemo(() => {
@@ -242,21 +227,12 @@ export default function DashboardPage() {
     return parent.name
   }
 
-  // 관리자 가드 — hook 호출 다음에 early return (rules of hooks 준수)
-  if (isAdmin === false) {
-    return (
-      <div className="p-6 flex items-center justify-center h-64 text-gray-400 text-sm">
-        관리자 권한이 필요합니다.
-      </div>
-    )
-  }
-
   return (
     <div className="p-6">
       {/* 헤더 */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">📊 대시보드</h1>
+          <h1 className="text-2xl font-bold text-gray-900">📊 운영 모니터링</h1>
           <p className="text-sm text-gray-500 mt-1">
             팀 워크로드와 일정 위험을 한눈에
           </p>
@@ -283,8 +259,6 @@ export default function DashboardPage() {
           <h2 className="text-base font-semibold text-gray-900">이번주 멤버별 워크로드</h2>
           <p className="text-xs text-gray-500 mt-0.5">
             {format(weekRange.start, 'M/d(EEE)', { locale: ko })} ~ {format(weekRange.end, 'M/d(EEE)', { locale: ko })}
-            <span className="text-gray-300"> · </span>
-            누가 일이 몰려있나
           </p>
         </div>
 
