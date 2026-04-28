@@ -287,6 +287,7 @@ export default function AdminPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-200 bg-gray-50">
+                <th className="text-center text-xs font-semibold text-gray-400 uppercase tracking-wide px-3 py-3 w-12">#</th>
                 <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3">이름</th>
                 <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3">이메일</th>
                 <th className="text-center text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 py-3">권한</th>
@@ -299,15 +300,18 @@ export default function AdminPage() {
             <tbody>
               {users.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-gray-400">등록된 사용자가 없습니다.</td>
+                  <td colSpan={8} className="py-12 text-center text-gray-400">등록된 사용자가 없습니다.</td>
                 </tr>
-              ) : users.map(user => {
+              ) : users.map((user, idx) => {
                 const isSelf    = user.email === myEmail
                 const isSaving  = savingId === user.id
                 return (
                   <tr key={user.id}
                     className={`border-b border-gray-100 last:border-0 hover:bg-gray-50/50 transition-colors ${!user.is_active ? 'opacity-50' : ''}`}
                   >
+                    {/* 번호 */}
+                    <td className="px-3 py-3 text-center text-xs text-gray-400 tabular-nums">{idx + 1}</td>
+
                     {/* 이름 */}
                     <td className="px-4 py-3 font-medium text-gray-800">
                       {user.name ?? <span className="text-gray-400 text-xs">미입력</span>}
