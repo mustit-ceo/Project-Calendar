@@ -717,6 +717,24 @@ export default function MembersPage() {
     }
   }, [])
 
+  /* ─ mount/뷰 전환 시 현재 기간이 화면 중앙에 오도록 자동 스크롤 ── */
+  /* (양방향 드래그 가능하도록 — 좌측에 과거, 우측에 미래) */
+  useEffect(() => {
+    if (loading) return
+    const t = setTimeout(() => {
+      const el = bodyScrollRef.current
+      if (!el) return
+      const currentIdx = periods.findIndex(p => p.isCurrent)
+      const idx = currentIdx >= 0 ? currentIdx : Math.floor(periods.length / 2)
+      const memberW = 200
+      const periodW = 250
+      const targetCenter = memberW + idx * periodW + periodW / 2
+      const left = Math.max(0, targetCenter - el.clientWidth / 2)
+      el.scrollLeft = left
+    }, 50)
+    return () => clearTimeout(t)
+  }, [loading, periods, viewMode, offset])
+
   /* ─ 마우스 드래그 패닝 (window 기반 — div 밖에서도 추적) ── */
   const panStartRef = useRef<{ x: number; scrollLeft: number } | null>(null)
   const didPanRef   = useRef(false)
