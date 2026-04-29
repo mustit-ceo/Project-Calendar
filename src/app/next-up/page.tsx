@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { NextUp, BusinessType } from '@/lib/types'
-import { RefreshCw, Plus, Pencil, Trash2 } from 'lucide-react'
+import { RefreshCw, Plus, Pencil, Trash2, GripVertical } from 'lucide-react'
 
 const BUSINESS_TYPES: BusinessType[] = ['거래액', '고객경험', '생산성', '기타']
 
@@ -114,6 +114,12 @@ export default function NextUpPage() {
   const [showForm, setShowForm] = useState(false)
   const [editItem, setEditItem] = useState<NextUp | null>(null)
 
+  // 드래그 순서 변경
+  const [dragId, setDragId] = useState<string | null>(null)
+  const [overId, setOverId] = useState<string | null>(null)
+  const [overPos, setOverPos] = useState<'above' | 'below'>('above')
+  const dragHandleDownRef = useRef(false)
+
   const fetchItems = useCallback(async () => {
     setLoading(true)
     const { data } = await supabase.from('next_up').select('*').order('sort_order').order('created_at')
@@ -127,6 +133,27 @@ export default function NextUpPage() {
     if (!confirm('삭제하시겠습니까?')) return
     await supabase.from('next_up').delete().eq('id', id)
     fetchItems()
+  }
+
+  async function handleReorder(draggedId: string, targetId: string, position: 'above' | 'below') {
+    if (draggedId === targetId) return
+    const dragIdx = items.findIndex(i => i.id === draggedId)
+    const tgtIdx  = items.findIndex(i => i.id === targetId)
+    if (dragIdx < 0 || tgtIdx < 0) return
+
+    const rest = items.filter(i => i.id !== draggedId)
+    const targetIdxInRest = rest.findIndex(i => i.id === targetId)
+    if (targetIdxInRest < 0) return
+    const insertAt = position === 'above' ? targetIdxInRest : targetIdxInRest + 1
+    const dragged = items[dragIdx]
+    rest.splice(insertAt, 0, dragged)
+
+    // sort_order 재배정
+    const reordered = rest.map((it, idx) => ({ ...it, sort_order: idx * 10 }))
+    setItems(reordered)
+    await Promise.all(
+      reordered.map(it => supabase.from('next_up').update({ sort_order: it.sort_order }).eq('id', it.id))
+    )
   }
 
   return (
@@ -156,6 +183,7 @@ export default function NextUpPage() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-200 bg-gray-50">
+                <th className="text-center text-xs font-semibold text-gray-400 uppercase py-3 px-2 w-16">#</th>
                 <th className="text-left text-xs font-semibold text-gray-500 uppercase py-3 px-4">구분</th>
                 <th className="text-left text-xs font-semibold text-gray-500 uppercase py-3 px-3">프로젝트</th>
                 <th className="text-left text-xs font-semibold text-gray-500 uppercase py-3 px-3">발의</th>
@@ -167,9 +195,58 @@ export default function NextUpPage() {
             </thead>
             <tbody>
               {items.length === 0 ? (
-                <tr><td colSpan={7} className="py-12 text-center text-gray-400 text-sm">등록된 항목이 없습니다.</td></tr>
-              ) : items.map(item => (
-                <tr key={item.id} className="border-b border-gray-100 hover:bg-gray-50 group">
+                <tr><td colSpan={8} className="py-12 text-center text-gray-400 text-sm">등록된 항목이 없습니다.</td></tr>
+              ) : items.map((item, idx) => {
+                const isDragging = dragId === item.id
+                const isOver     = overId === item.id && dragId && dragId !== item.id
+                return (
+                <tr
+                  key={item.id}
+                  draggable
+                  onDragStart={e => {
+                    if (!dragHandleDownRef.current) { e.preventDefault(); return }
+                    dragHandleDownRef.current = false
+                    setDragId(item.id)
+                    e.dataTransfer.effectAllowed = 'move'
+                    const ghost = document.createElement('div')
+                    ghost.style.cssText = 'position:fixed;top:-9999px'
+                    document.body.appendChild(ghost)
+                    e.dataTransfer.setDragImage(ghost, 0, 0)
+                    setTimeout(() => document.body.removeChild(ghost), 0)
+                  }}
+                  onDragOver={e => {
+                    if (!dragId || dragId === item.id) return
+                    e.preventDefault()
+                    const rect = e.currentTarget.getBoundingClientRect()
+                    const above = e.clientY < rect.top + rect.height / 2
+                    setOverId(item.id)
+                    setOverPos(above ? 'above' : 'below')
+                  }}
+                  onDrop={() => {
+                    if (dragId && dragId !== item.id) {
+                      handleReorder(dragId, item.id, overPos)
+                    }
+                    setDragId(null); setOverId(null)
+                  }}
+                  onDragEnd={() => { setDragId(null); setOverId(null); dragHandleDownRef.current = false }}
+                  className={`border-b border-gray-100 hover:bg-gray-50 group transition-opacity ${isDragging ? 'opacity-40' : ''} ${
+                    isOver && overPos === 'above' ? 'border-t-2 border-t-blue-400' : ''
+                  } ${isOver && overPos === 'below' ? 'border-b-2 border-b-blue-400' : ''}`}
+                >
+                  <td className="py-3 px-2">
+                    <div className="flex items-center justify-center gap-1">
+                      <button
+                        type="button"
+                        className="cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onMouseDown={() => { dragHandleDownRef.current = true }}
+                        onMouseUp={() => { dragHandleDownRef.current = false }}
+                        title="드래그하여 순서 변경"
+                      >
+                        <GripVertical size={14} />
+                      </button>
+                      <span className="text-xs text-gray-400 tabular-nums w-5 text-right">{idx + 1}</span>
+                    </div>
+                  </td>
                   <td className="py-3 px-4">
                     {item.business_type && (
                       <span className={`text-xs font-medium px-2 py-0.5 rounded ${BUSINESS_TYPE_COLORS[item.business_type] ?? ''}`}>
@@ -193,7 +270,8 @@ export default function NextUpPage() {
                     </div>
                   </td>
                 </tr>
-              ))}
+                )
+              })}
             </tbody>
           </table>
         </div>

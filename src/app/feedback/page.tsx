@@ -313,7 +313,7 @@ export default function FeedbackPage() {
           onChange={e => setContent(e.target.value)}
           placeholder="개선했으면 하는 점이나 새로운 아이디어를 자유롭게 작성해주세요."
           rows={5}
-          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 resize-y"
+          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-300 resize-y"
         />
 
         {/* 링크 입력 */}
@@ -324,7 +324,7 @@ export default function FeedbackPage() {
             value={link}
             onChange={e => setLink(e.target.value)}
             placeholder="참고 링크 (선택사항) — 예: https://example.com"
-            className="flex-1 text-sm focus:outline-none"
+            className="flex-1 text-sm text-gray-900 placeholder-gray-400 focus:outline-none"
           />
         </div>
 
