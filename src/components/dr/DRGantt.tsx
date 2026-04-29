@@ -13,7 +13,7 @@ import {
 import { ko } from 'date-fns/locale'
 import {
   X, ChevronLeft, ChevronRight, MoreHorizontal, Check,
-  GripVertical, Trash2, Pencil,
+  GripVertical, Trash2, Pencil, Plus,
 } from 'lucide-react'
 
 /* ─ 타임라인 상수 ──────────────────────────────────────────── */
@@ -476,6 +476,45 @@ export function DRGantt({
     return o
   }, [widths])
 
+  /* ─ 트리 빌드 + flatten with depth (root → 자식 sort_order 순) ── */
+  const flatRows = useMemo(() => {
+    type Node = DrItem & { _children: Node[] }
+    const map = new Map<string, Node>()
+    items.forEach(i => map.set(i.id, { ...i, _children: [] }))
+    const roots: Node[] = []
+    items.forEach(i => {
+      const node = map.get(i.id)!
+      if (i.parent_id && map.has(i.parent_id)) {
+        map.get(i.parent_id)!._children.push(node)
+      } else {
+        roots.push(node)
+      }
+    })
+    // root 순서는 외부 정렬 그대로, 자식만 sort_order 정렬
+    const sortChildrenDeep = (nodes: Node[]) => {
+      nodes.sort((a, b) => a.sort_order - b.sort_order)
+      nodes.forEach(n => sortChildrenDeep(n._children))
+    }
+    roots.forEach(r => sortChildrenDeep(r._children))
+
+    const out: { item: DrItem; depth: number }[] = []
+    const walk = (nodes: Node[], depth: number) => {
+      for (const n of nodes) {
+        out.push({ item: n, depth })
+        walk(n._children, depth + 1)
+      }
+    }
+    walk(roots, 0)
+    return out
+  }, [items])
+
+  /* ─ leaf 판정: 자식이 없는 항목 (간트 일정은 leaf만) ── */
+  const hasChildrenSet = useMemo(() => {
+    const s = new Set<string>()
+    items.forEach(i => { if (i.parent_id) s.add(i.parent_id) })
+    return s
+  }, [items])
+
   /* ─ 스크롤 ───────────────────────────────────────────────── */
   const tableScrollRef = useRef<HTMLDivElement>(null)
   const monthTextRef   = useRef<HTMLSpanElement>(null)
@@ -529,7 +568,7 @@ export function DRGantt({
 
   /* ─ 팝업 상태 ────────────────────────────────────────────── */
   const [ganttPopup, setGanttPopup] = useState<{ id: string; dates: string[] } | null>(null)
-  const [actionMenu, setActionMenu] = useState<{ rect: DOMRect; item: DrItem } | null>(null)
+  const [actionMenu, setActionMenu] = useState<{ rect: DOMRect; item: DrItem; depth: number } | null>(null)
   const [teamAnchor, setTeamAnchor] = useState<DOMRect | null>(null)
   const [editTeamId, setEditTeamId] = useState<string | null>(null)
   const [statusAnchor, setStatusAnchor] = useState<{ rect: DOMRect; itemId: string; current: string } | null>(null)
@@ -595,6 +634,29 @@ export function DRGantt({
     setActionMenu(null)
     onDeleteItems([id])
     await supabase.from('dr_items').delete().eq('id', id)
+  }
+
+  /* ─ 하위 항목 추가 (Task / Sub-task) ─────────────────────── */
+  async function handleAddChild(parent: DrItem) {
+    setActionMenu(null)
+    const { data, error } = await supabase.from('dr_items').insert({
+      parent_id: parent.id,
+      category: parent.category,
+      name: '새 항목',
+      status: '대기' as Status,
+      department: parent.department,
+      assignees: [],
+      jira_ticket: null,
+      sort_order: 9999,
+      is_archived: false,
+    }).select().single()
+    if (error) { console.error('[DR] add child error:', error); return }
+    if (data) {
+      onAddItem(data as DrItem)
+      // 즉시 이름 편집 모드
+      setEditCell({ id: data.id, field: 'name' })
+      setEditValue('새 항목')
+    }
   }
 
   /* ─ Drag & Drop 재정렬 ───────────────────────────────────── */
@@ -862,12 +924,15 @@ export function DRGantt({
                 </td>
               </tr>
             )}
-            {items.map((item, ri) => {
+            {flatRows.map(({ item, depth }, ri) => {
               const jiraUrl    = getJiraUrl(item.jira_ticket)
               const ganttColor = getDeptGanttColor(item.department)
               const segments   = segmentsMap.get(item.id) ?? []
               const isEditingName = editCell?.id === item.id && editCell.field === 'name'
               const isEditingJira = editCell?.id === item.id && editCell.field === 'jira'
+              const isLeaf       = !hasChildrenSet.has(item.id)
+              const indentPx     = depth * 18
+              const branchSymbol = depth === 1 ? '·' : depth >= 2 ? '└' : null
 
               return (
                 <tr
@@ -914,7 +979,7 @@ export function DRGantt({
                     className="sticky z-10 border-r border-gray-200 px-2"
                     style={{ left: stickyLeft.name, width: widths.name, background: 'inherit', paddingTop: ROW_PY, paddingBottom: ROW_PY }}
                   >
-                    <div className="flex items-center gap-1 min-w-0">
+                    <div className="flex items-center gap-1 min-w-0" style={{ paddingLeft: indentPx }}>
                       <div
                         className={`flex-shrink-0 opacity-0 group-hover:opacity-40 ${
                           sortMode === 'manual'
@@ -931,6 +996,9 @@ export function DRGantt({
                       >
                         <GripVertical size={14} />
                       </div>
+                      {branchSymbol && (
+                        <span className="flex-shrink-0 text-gray-300 text-xs">{branchSymbol}</span>
+                      )}
                       {isEditingName ? (
                         <input
                           autoFocus
@@ -949,14 +1017,14 @@ export function DRGantt({
                           onClick={() => startEdit(item, 'name')}
                           title="클릭하여 이름 수정"
                         >
-                          <span className="text-sm text-gray-800 truncate block">{item.name}</span>
+                          <span className={`truncate block ${depth === 0 ? 'text-sm font-medium text-gray-800' : 'text-[13px] text-gray-700'}`}>{item.name}</span>
                         </div>
                       )}
                       <button
                         className="flex-shrink-0 opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-gray-100 text-gray-400 cursor-pointer"
                         onClick={e => {
                           e.stopPropagation()
-                          setActionMenu({ rect: e.currentTarget.getBoundingClientRect(), item })
+                          setActionMenu({ rect: e.currentTarget.getBoundingClientRect(), item, depth })
                         }}
                       >
                         <MoreHorizontal size={14} />
@@ -1154,14 +1222,16 @@ export function DRGantt({
 
       {/* ── 액션 메뉴 ── */}
       {actionMenu && (() => {
-        const { rect, item } = actionMenu
-        const top  = Math.min(rect.bottom + 4, window.innerHeight - 100)
+        const { rect, item, depth } = actionMenu
+        const top  = Math.min(rect.bottom + 4, window.innerHeight - 140)
         const left = Math.max(rect.left - 100, 8)
+        const canAddChild = depth < 2  // root → Task / Task → Sub-task / Sub-task는 추가 불가
+        const childLabel  = depth === 0 ? 'Task 추가' : 'Sub-task 추가'
         return (
           <>
             <div className="fixed inset-0 z-[9998]" onClick={() => setActionMenu(null)} />
             <div
-              className="fixed z-[9999] bg-white border border-gray-200 rounded-xl shadow-xl py-1 w-36"
+              className="fixed z-[9999] bg-white border border-gray-200 rounded-xl shadow-xl py-1 w-40"
               style={{ top, left }}
               onClick={e => e.stopPropagation()}
             >
@@ -1175,6 +1245,15 @@ export function DRGantt({
                 <Pencil size={13} className="text-gray-400" />
                 이름 수정
               </button>
+              {canAddChild && (
+                <button
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-blue-50 cursor-pointer"
+                  onClick={() => handleAddChild(item)}
+                >
+                  <Plus size={13} className="text-blue-500" />
+                  {childLabel}
+                </button>
+              )}
               <button
                 className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 cursor-pointer"
                 onClick={() => handleDelete(item.id)}

@@ -109,6 +109,7 @@ export interface AllowedUser {
 // ── DR 전용 타입 ─────────────────────────────────────────────
 export interface DrItem {
   id: string
+  parent_id: string | null
   category: string
   name: string
   jira_ticket: string | null
@@ -120,6 +121,7 @@ export interface DrItem {
   sort_order: number
   created_at: string
   updated_at: string
+  children?: DrItem[]
 }
 
 export interface DrProgress {
