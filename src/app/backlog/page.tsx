@@ -12,7 +12,7 @@ import {
 } from 'lucide-react'
 
 const ALL_CATEGORIES = [...PROJECT_CATEGORIES, ...DR_CATEGORIES]
-const DR_DEPTS = ['BE', 'FE'] as const
+const DR_DEPTS = ['PM', 'BE', 'FE'] as const
 
 /* ── ISO timestamp → YYYY-MM-DD (로컬 시간 기준) ─ */
 function fmtIsoDate(iso: string | null | undefined): string {
@@ -433,7 +433,7 @@ export default function BacklogPage() {
   async function moveToDr(item: BacklogItem) {
     if (!confirm(`"${item.name}"을(를) DR로 이동할까요?`)) return
     const category = DR_CATEGORIES.includes(item.category) ? item.category : 'DR'
-    // DR은 BE/FE만 허용
+    // DR은 PM/BE/FE만 허용
     const dept = (item.department && (DR_DEPTS as readonly string[]).includes(item.department))
       ? item.department
       : null

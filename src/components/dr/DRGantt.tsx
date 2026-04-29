@@ -1077,17 +1077,35 @@ export function DRGantt({
                         <span className="flex-shrink-0 text-gray-300 text-xs">{branchSymbol}</span>
                       )}
                       {isEditingName ? (
-                        <input
-                          autoFocus
-                          className="flex-1 text-sm border border-blue-400 rounded px-2 py-0.5 focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white"
-                          value={editValue}
-                          onChange={e => setEditValue(e.target.value)}
-                          onBlur={() => commitEdit(item.id, 'name', editValue)}
-                          onKeyDown={e => {
-                            if (e.key === 'Enter') commitEdit(item.id, 'name', editValue)
-                            if (e.key === 'Escape') setEditCell(null)
-                          }}
-                        />
+                        <>
+                          <input
+                            autoFocus
+                            className="flex-1 min-w-0 text-sm border border-blue-400 rounded px-2 py-0.5 focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white text-gray-900"
+                            value={editValue}
+                            onChange={e => setEditValue(e.target.value)}
+                            onBlur={() => setEditCell(null)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') commitEdit(item.id, 'name', editValue)
+                              if (e.key === 'Escape') setEditCell(null)
+                            }}
+                          />
+                          <button
+                            onMouseDown={e => e.preventDefault()}
+                            onClick={() => commitEdit(item.id, 'name', editValue)}
+                            className="flex-shrink-0 w-5 h-5 bg-blue-500 hover:bg-blue-600 text-white rounded flex items-center justify-center cursor-pointer"
+                            title="저장"
+                          >
+                            <Check size={11} />
+                          </button>
+                          <button
+                            onMouseDown={e => e.preventDefault()}
+                            onClick={() => setEditCell(null)}
+                            className="flex-shrink-0 w-5 h-5 text-gray-400 hover:text-gray-600 rounded flex items-center justify-center cursor-pointer"
+                            title="취소"
+                          >
+                            <X size={11} />
+                          </button>
+                        </>
                       ) : (
                         <div
                           className="flex-1 min-w-0 cursor-pointer hover:bg-blue-50 rounded px-1 transition-colors"
@@ -1115,18 +1133,36 @@ export function DRGantt({
                     style={{ left: stickyLeft.jira, width: widths.jira, background: 'inherit', paddingTop: ROW_PY, paddingBottom: ROW_PY }}
                   >
                     {isEditingJira ? (
-                      <input
-                        autoFocus
-                        className="w-full border border-blue-400 rounded px-1.5 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
-                        value={editValue}
-                        onChange={e => setEditValue(e.target.value)}
-                        onBlur={() => commitEdit(item.id, 'jira', editValue)}
-                        onKeyDown={e => {
-                          if (e.key === 'Enter') commitEdit(item.id, 'jira', editValue)
-                          if (e.key === 'Escape') setEditCell(null)
-                        }}
-                        placeholder="PROJ-0000"
-                      />
+                      <div className="flex items-center gap-1 w-full">
+                        <input
+                          autoFocus
+                          className="flex-1 min-w-0 border border-blue-400 rounded px-1.5 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400 text-gray-900"
+                          value={editValue}
+                          onChange={e => setEditValue(e.target.value)}
+                          onBlur={() => setEditCell(null)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') commitEdit(item.id, 'jira', editValue)
+                            if (e.key === 'Escape') setEditCell(null)
+                          }}
+                          placeholder="PROJ-0000"
+                        />
+                        <button
+                          onMouseDown={e => e.preventDefault()}
+                          onClick={() => commitEdit(item.id, 'jira', editValue)}
+                          className="flex-shrink-0 w-5 h-5 bg-blue-500 hover:bg-blue-600 text-white rounded flex items-center justify-center cursor-pointer"
+                          title="저장"
+                        >
+                          <Check size={11} />
+                        </button>
+                        <button
+                          onMouseDown={e => e.preventDefault()}
+                          onClick={() => setEditCell(null)}
+                          className="flex-shrink-0 w-5 h-5 text-gray-400 hover:text-gray-600 rounded flex items-center justify-center cursor-pointer"
+                          title="취소"
+                        >
+                          <X size={11} />
+                        </button>
+                      </div>
                     ) : (
                       <div
                         className="cursor-pointer hover:bg-blue-50 rounded px-1 transition-colors"

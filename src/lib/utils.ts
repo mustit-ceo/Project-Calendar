@@ -31,7 +31,7 @@ export const CATEGORIES = [...PROJECT_CATEGORIES, ...DR_CATEGORIES]
 
 export const STATUSES: Status[] = ['진행', '대기', '완료', '보류', '예정']
 export const DEPARTMENTS = ['PM', 'BE', 'FE', 'Design', 'Oth']
-export const DR_DEPARTMENTS = ['BE', 'FE']
+export const DR_DEPARTMENTS = ['PM', 'BE', 'FE']
 
 export function getJiraUrl(ticket: string | null): string | null {
   if (!ticket || ticket === '-') return null
