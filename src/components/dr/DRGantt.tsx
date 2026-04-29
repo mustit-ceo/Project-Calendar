@@ -476,6 +476,15 @@ export function DRGantt({
     return o
   }, [widths])
 
+  /* ─ 자식 추가 상태 (입력 행 표시용) ── */
+  const [addingChild, setAddingChild] = useState<{ parentId: string; depth: number } | null>(null)
+  const [addingValue, setAddingValue] = useState('')
+
+  /* ─ DisplayRow: 기존 행 + 신규 입력 행 ── */
+  type DisplayRow =
+    | { kind: 'existing'; item: DrItem; depth: number }
+    | { kind: 'new';      parentId: string; depth: number }
+
   /* ─ 트리 빌드 + flatten with depth (root → 자식 sort_order 순) ── */
   const flatRows = useMemo(() => {
     type Node = DrItem & { _children: Node[] }
@@ -514,6 +523,25 @@ export function DRGantt({
     items.forEach(i => { if (i.parent_id) s.add(i.parent_id) })
     return s
   }, [items])
+
+  /* ─ flatRows + addingChild 새 행을 합산한 렌더용 리스트 ── */
+  const displayRows = useMemo<DisplayRow[]>(() => {
+    const base: DisplayRow[] = flatRows.map(r => ({ kind: 'existing' as const, ...r }))
+    if (!addingChild) return base
+    const parentIdx = base.findIndex(r => r.kind === 'existing' && r.item.id === addingChild.parentId)
+    if (parentIdx === -1) return base
+    const parentDepth = base[parentIdx].depth
+    let insertAfter = parentIdx
+    for (let i = parentIdx + 1; i < base.length; i++) {
+      if (base[i].depth > parentDepth) insertAfter = i
+      else break
+    }
+    const result = [...base]
+    result.splice(insertAfter + 1, 0, {
+      kind: 'new', parentId: addingChild.parentId, depth: addingChild.depth,
+    })
+    return result
+  }, [flatRows, addingChild]) // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ─ 스크롤 ───────────────────────────────────────────────── */
   const tableScrollRef = useRef<HTMLDivElement>(null)
@@ -636,13 +664,18 @@ export function DRGantt({
     await supabase.from('dr_items').delete().eq('id', id)
   }
 
-  /* ─ 하위 항목 추가 (Task / Sub-task) ─────────────────────── */
-  async function handleAddChild(parent: DrItem) {
-    setActionMenu(null)
+  /* ─ 하위 항목 추가 — 입력 행 표시 후 확정 시 INSERT ─────── */
+  async function handleConfirmAddChild(parentId: string, name: string) {
+    const trimmed = name.trim()
+    setAddingChild(null)
+    setAddingValue('')
+    if (!trimmed) return
+    const parent = items.find(i => i.id === parentId)
+    if (!parent) return
     const { data, error } = await supabase.from('dr_items').insert({
-      parent_id: parent.id,
+      parent_id: parentId,
       category: parent.category,
-      name: '새 항목',
+      name: trimmed,
       status: '대기' as Status,
       department: parent.department,
       assignees: [],
@@ -651,12 +684,7 @@ export function DRGantt({
       is_archived: false,
     }).select().single()
     if (error) { console.error('[DR] add child error:', error); return }
-    if (data) {
-      onAddItem(data as DrItem)
-      // 즉시 이름 편집 모드
-      setEditCell({ id: data.id, field: 'name' })
-      setEditValue('새 항목')
-    }
+    if (data) onAddItem(data as DrItem)
   }
 
   /* ─ Drag & Drop 재정렬 ───────────────────────────────────── */
@@ -924,7 +952,56 @@ export function DRGantt({
                 </td>
               </tr>
             )}
-            {flatRows.map(({ item, depth }, ri) => {
+            {displayRows.map((row, ri) => {
+              /* ── 신규 입력 행 ── */
+              if (row.kind === 'new') {
+                return (
+                  <tr key={`new-${row.parentId}-${row.depth}`} style={{ background: '#f0f7ff' }}>
+                    <td
+                      className="sticky z-10 px-2 border-r border-gray-200"
+                      style={{ left: stickyLeft.name, width: widths.name, background: 'inherit', paddingTop: ROW_PY, paddingBottom: ROW_PY }}
+                    >
+                      <div className="flex items-center gap-1 min-w-0" style={{ paddingLeft: row.depth * 18 }}>
+                        <span className="flex-shrink-0 text-gray-300 text-xs">{row.depth >= 2 ? '└' : '·'}</span>
+                        <input
+                          autoFocus
+                          value={addingValue}
+                          onChange={e => setAddingValue(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') handleConfirmAddChild(row.parentId, addingValue)
+                            if (e.key === 'Escape') { setAddingChild(null); setAddingValue('') }
+                          }}
+                          placeholder={row.depth === 1 ? 'Task 이름 입력 후 Enter' : 'Sub-task 이름 입력 후 Enter'}
+                          className="flex-1 min-w-0 border border-blue-400 rounded px-2 py-0.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white text-gray-900"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleConfirmAddChild(row.parentId, addingValue)}
+                          className="flex-shrink-0 w-5 h-5 bg-blue-500 hover:bg-blue-600 text-white rounded flex items-center justify-center cursor-pointer"
+                          title="저장"
+                        >
+                          <Check size={11} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setAddingChild(null); setAddingValue('') }}
+                          className="flex-shrink-0 w-5 h-5 text-gray-400 hover:text-gray-600 rounded flex items-center justify-center cursor-pointer"
+                          title="취소"
+                        >
+                          <X size={11} />
+                        </button>
+                      </div>
+                    </td>
+                    <td className="sticky z-10 border-r border-gray-200" style={{ left: stickyLeft.jira,   width: widths.jira,   background: 'inherit' }} />
+                    <td className="sticky z-10 border-r border-gray-200" style={{ left: stickyLeft.status, width: widths.status, background: 'inherit' }} />
+                    <td className="sticky z-10 border-r border-gray-200" style={{ left: stickyLeft.team,   width: widths.team,   background: 'inherit' }} />
+                    <td className="p-0" style={{ width: dateAreaW }} />
+                  </tr>
+                )
+              }
+
+              /* ── 기존 행 ── */
+              const { item, depth } = row
               const jiraUrl    = getJiraUrl(item.jira_ticket)
               const ganttColor = getDeptGanttColor(item.department)
               const segments   = segmentsMap.get(item.id) ?? []
@@ -1248,7 +1325,11 @@ export function DRGantt({
               {canAddChild && (
                 <button
                   className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-blue-50 cursor-pointer"
-                  onClick={() => handleAddChild(item)}
+                  onClick={() => {
+                    setActionMenu(null)
+                    setAddingValue('')
+                    setAddingChild({ parentId: item.id, depth: depth + 1 })
+                  }}
                 >
                   <Plus size={13} className="text-blue-500" />
                   {childLabel}
