@@ -562,8 +562,9 @@ function DelayPanel({
                       return (
                         <li key={d.project.id} className="text-xs">
                           <Link
-                            href="/projects"
-                            className="block bg-white rounded px-2 py-1.5 hover:bg-gray-50 border border-transparent hover:border-gray-200 transition-colors"
+                            href={`/calendar?task=${d.project.id}`}
+                            className="block bg-white rounded px-2 py-1.5 hover:bg-blue-50/50 border border-transparent hover:border-blue-200 transition-colors cursor-pointer"
+                            title="캘린더에서 보기"
                           >
                             <div className="flex items-center justify-between gap-2">
                               <span className="font-medium text-gray-900 truncate" title={d.project.name}>
