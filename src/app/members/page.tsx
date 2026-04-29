@@ -103,7 +103,7 @@ function generatePeriods(mode: ViewMode, offset: number): Period[] {
   if (mode === 'week') {
     // 기본(offset=0): 3주 전부터 12주 표시 (현재가 화면 중앙 부근, 양방향 드래그 가능)
     const baseMonday = addWeeks(getMondayOfWeek(today), -3 + offset)
-    return Array.from({ length: 12 }, (_, i) => {
+    return Array.from({ length: 16 }, (_, i) => {
       const mon = addWeeks(baseMonday, i)
       const fri = addDays(mon, 4)
       const isCurrent = mon <= today && today <= addDays(mon, 6)
@@ -121,7 +121,7 @@ function generatePeriods(mode: ViewMode, offset: number): Period[] {
   if (mode === 'month') {
     // 기본(offset=0): 3개월 전부터 12개월 표시 (현재가 화면 중앙 부근)
     const baseMonth = addMonths(startOfMonth(today), -3 + offset)
-    return Array.from({ length: 12 }, (_, i) => {
+    return Array.from({ length: 16 }, (_, i) => {
       const m    = addMonths(baseMonth, i)
       const mEnd = endOfMonth(m)
       return {
@@ -141,7 +141,7 @@ function generatePeriods(mode: ViewMode, offset: number): Period[] {
 
   const weekdays: Date[] = []
   let cur = new Date(baseDay)
-  while (weekdays.length < 12) {
+  while (weekdays.length < 16) {
     if (getDay(cur) !== 0 && getDay(cur) !== 6) weekdays.push(new Date(cur))
     cur = addDays(cur, 1)
   }
