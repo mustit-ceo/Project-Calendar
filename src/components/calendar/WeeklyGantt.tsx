@@ -1892,7 +1892,7 @@ export function WeeklyGantt({
                       className="p-0 relative"
                       style={{ width: dateAreaW, height: BAR_H + py * 2, backgroundImage: WEEK_BG }}
                     >
-                      {/* 루트 프로젝트 기간 바 (start_date ~ end_date, #999999) */}
+                      {/* 루트 프로젝트 기간 바 (start_date ~ end_date, #cccccc) */}
                       {isRoot && (() => {
                         const bar = rootDurationBar.get(project.id)
                         if (!bar) return null
@@ -1903,7 +1903,7 @@ export function WeeklyGantt({
                               left: bar.startIdx * DAY_W,
                               width: (bar.endIdx - bar.startIdx + 1) * DAY_W,
                               top: '50%', height: BAR_H, transform: 'translateY(-50%)',
-                              background: '#999999',
+                              background: '#cccccc',
                               zIndex: 0,
                             }}
                           />
