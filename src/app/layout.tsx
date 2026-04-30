@@ -6,6 +6,7 @@ import { headers } from 'next/headers'
 export const metadata: Metadata = {
   title: 'Project Calendar | Mustit',
   description: '머스트잇 프로젝트 캘린더',
+  manifest: '/manifest.webmanifest',
 }
 
 export default async function RootLayout({

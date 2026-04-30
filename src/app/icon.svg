@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <title>Project Calendar</title>
+  <desc>Calendar with Gantt bars — Project Calendar favicon</desc>
+  <defs>
+    <clipPath id="card">
+      <rect x="0" y="0" width="1024" height="1024" rx="200" ry="200"/>
+    </clipPath>
+  </defs>
+
+  <!-- 카드 배경 (흰색) -->
+  <g clip-path="url(#card)">
+    <rect x="0" y="0" width="1024" height="1024" fill="#FFFFFF"/>
+
+    <!-- 상단 헤더 (네이비) -->
+    <rect x="0" y="0" width="1024" height="205" fill="#0F172A"/>
+
+    <!-- 가로 가이드 라인(연회색) — 캘린더 grid 느낌 -->
+    <rect x="0" y="345" width="1024" height="6" fill="#E2E8F0"/>
+    <rect x="0" y="531" width="1024" height="6" fill="#E2E8F0"/>
+    <rect x="0" y="717" width="1024" height="6" fill="#E2E8F0"/>
+    <rect x="0" y="903" width="1024" height="6" fill="#E2E8F0"/>
+
+    <!-- Gantt 바 3개 -->
+    <!-- 앰버 -->
+    <rect x="93" y="386" width="559" height="93" rx="28" ry="28" fill="#F59E0B"/>
+    <!-- 블루 -->
+    <rect x="242" y="572" width="596" height="93" rx="28" ry="28" fill="#1D4ED8"/>
+    <!-- 그린 -->
+    <rect x="168" y="758" width="447" height="93" rx="28" ry="28" fill="#16A34A"/>
+  </g>
+
+  <!-- 헤더 위 링(앰버) — 캘린더 위 고리 표현 -->
+  <rect x="186" y="56" width="56" height="130" rx="28" ry="28" fill="#F59E0B"/>
+  <rect x="781" y="56" width="56" height="130" rx="28" ry="28" fill="#F59E0B"/>
+
+  <!-- 외곽 라인 (얇은 다크 보더) -->
+  <rect x="0" y="0" width="1024" height="1024" rx="200" ry="200"
+        fill="none" stroke="#0F172A" stroke-width="10"/>
+</svg>
