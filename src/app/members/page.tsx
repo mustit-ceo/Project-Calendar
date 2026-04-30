@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Project, TaskProgress, TeamMember, Department, DrItem, DrProgress } from '@/lib/types'
+import { Project, TaskProgress, TeamMember, Department, DrItem, DrProgress, Holiday } from '@/lib/types'
 import { useRouter } from 'next/navigation'
 import {
   format, addDays, addWeeks, addMonths,
@@ -568,6 +568,7 @@ export default function MembersPage() {
   const [progress, setProgress] = useState<TaskProgress[]>([])
   const [drItems,    setDrItems]    = useState<DrItem[]>([])
   const [drProgress, setDrProgress] = useState<DrProgress[]>([])
+  const [holidays,   setHolidays]   = useState<Holiday[]>([])
   const [loading,    setLoading]    = useState(true)
   const [fetchError, setFetchError] = useState<string | null>(null)
 
@@ -587,12 +588,14 @@ export default function MembersPage() {
         { data: prData,   error: prErr },
         { data: drData,   error: drErr },
         { data: drPrData, error: drPrErr },
+        { data: hData },
       ] = await Promise.all([
         supabase.from('team_members').select('*').order('name'),
         supabase.from('projects').select('*').eq('is_archived', false),
         supabase.from('task_progress').select('*'),
         supabase.from('dr_items').select('*').eq('is_archived', false),
         supabase.from('dr_progress').select('*'),
+        supabase.from('holidays').select('*'),
       ])
       const err = mErr || pErr || prErr || drErr || drPrErr
       if (err) {
@@ -604,6 +607,7 @@ export default function MembersPage() {
       setProgress(prData ?? [])
       setDrItems(drData ?? [])
       setDrProgress(drPrData ?? [])
+      setHolidays((hData ?? []) as Holiday[])
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e)
       console.error('[Members] unexpected error:', e)
@@ -621,6 +625,13 @@ export default function MembersPage() {
     members.filter(m => m.is_active && (filterDept === 'all' || m.department === filterDept)),
     [members, filterDept]
   )
+
+  /* ─ 공휴일 맵 (day 뷰에서만 컬럼 표시) ── */
+  const holidayMap = useMemo(() => {
+    const m = new Map<string, string>()
+    holidays.forEach(h => m.set(h.date, h.name))
+    return m
+  }, [holidays])
 
   /* ─ 디버그: 매칭 실패 원인 추적 (개발용) ─── */
   useEffect(() => {
@@ -944,29 +955,43 @@ export default function MembersPage() {
                   >
                     <span className="text-xs font-bold text-gray-400 uppercase tracking-wide">멤버</span>
                   </div>
-                  {periods.map(p => (
-                    <div
-                      key={p.key}
-                      className={`flex-shrink-0 px-4 py-3 border-r border-gray-300 last:border-r-0 ${
-                        p.isCurrent ? 'bg-blue-50' : ''
-                      }`}
-                      style={{ width: 250 }}
-                    >
-                      <div className="flex items-center gap-1.5">
-                        <span className={`text-sm font-bold ${p.isCurrent ? 'text-blue-600' : 'text-gray-700'}`}>
-                          {p.label}
-                        </span>
-                        {p.isCurrent && (
-                          <span className="text-[10px] bg-blue-500 text-white px-1.5 py-0.5 rounded-full font-semibold">
-                            현재
+                  {periods.map(p => {
+                    const holidayName = viewMode === 'day' ? holidayMap.get(format(p.start, 'yyyy-MM-dd')) : undefined
+                    const isHoliday   = !!holidayName
+                    return (
+                      <div
+                        key={p.key}
+                        className={`flex-shrink-0 px-4 py-3 border-r border-gray-300 last:border-r-0 ${
+                          p.isCurrent ? 'bg-blue-50' : isHoliday ? 'bg-red-50/60' : ''
+                        }`}
+                        style={{ width: 250 }}
+                        title={holidayName}
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span className={`text-sm font-bold ${
+                            p.isCurrent ? 'text-blue-600' : isHoliday ? 'text-red-500' : 'text-gray-700'
+                          }`}>
+                            {p.label}
                           </span>
-                        )}
+                          {p.isCurrent && (
+                            <span className="text-[10px] bg-blue-500 text-white px-1.5 py-0.5 rounded-full font-semibold">
+                              현재
+                            </span>
+                          )}
+                          {isHoliday && !p.isCurrent && (
+                            <span className="text-[10px] text-red-500 font-medium truncate">
+                              {holidayName}
+                            </span>
+                          )}
+                        </div>
+                        <div className={`text-xs mt-0.5 ${
+                          p.isCurrent ? 'text-blue-400' : isHoliday ? 'text-red-400' : 'text-gray-400'
+                        }`}>
+                          {p.sublabel}
+                        </div>
                       </div>
-                      <div className={`text-xs mt-0.5 ${p.isCurrent ? 'text-blue-400' : 'text-gray-400'}`}>
-                        {p.sublabel}
-                      </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </div>
             </div>
@@ -1025,11 +1050,12 @@ export default function MembersPage() {
                     const tasks = rowProjects[pi]
                     const projectChips = tasks.filter(i => i.kind === 'project')
                     const drChips      = tasks.filter(i => i.kind === 'dr')
+                    const isHolidayCell = viewMode === 'day' && holidayMap.has(format(p.start, 'yyyy-MM-dd'))
                     return (
                       <div
                         key={p.key}
                         className={`flex-shrink-0 px-3 py-2.5 border-r border-gray-200 last:border-r-0 align-top ${
-                          p.isCurrent ? 'bg-blue-50/30' : ''
+                          p.isCurrent ? 'bg-blue-50/30' : isHolidayCell ? 'bg-red-50/40' : ''
                         }`}
                         style={{ width: 250, minHeight: 52 }}
                       >
