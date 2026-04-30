@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { Calendar, Users, CheckSquare, Rocket, Lightbulb, LogOut, ChevronLeft, ChevronRight, ShieldCheck, BarChart2, ClipboardList, MessageSquarePlus, LayoutDashboard } from 'lucide-react'
+import { Calendar, Users, CheckSquare, Rocket, Lightbulb, LogOut, ChevronLeft, ChevronRight, ShieldCheck, BarChart2, ClipboardList, MessageSquarePlus, LayoutDashboard, CalendarDays } from 'lucide-react'
 import { cn, getDelayedProjects } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { useCallback, useEffect, useState } from 'react'
@@ -311,6 +311,21 @@ export function Sidebar() {
               {collapsed && pendingNewCount > 0 && (
                 <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-red-500" />
               )}
+            </Link>
+            {/* 공휴일 관리 — 관리자 전용 */}
+            <Link
+              href="/admin/holidays"
+              title={collapsed ? '공휴일 관리' : undefined}
+              className={cn(
+                'flex items-center rounded-lg text-sm font-medium transition-colors',
+                collapsed ? 'justify-center px-0 py-2.5' : 'gap-3 px-3 py-2.5',
+                pathname === '/admin/holidays' || pathname.startsWith('/admin/holidays/')
+                  ? 'bg-indigo-600 text-white'
+                  : 'text-gray-400 hover:bg-gray-800 hover:text-white'
+              )}
+            >
+              <CalendarDays size={18} className="flex-shrink-0" />
+              {!collapsed && '공휴일 관리'}
             </Link>
           </>
         )}

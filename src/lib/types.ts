@@ -76,6 +76,14 @@ export interface TeamMember {
   is_leader: boolean
 }
 
+// ── 공휴일 ────────────────────────────────────────────────
+export interface Holiday {
+  id: string
+  date: string   // YYYY-MM-DD
+  name: string
+  created_at: string
+}
+
 // ── Backlog 전용 타입 ────────────────────────────────────────
 export interface BacklogItem {
   id: string
