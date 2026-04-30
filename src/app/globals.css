@@ -35,3 +35,19 @@ body {
 /* 타임라인 드래그 패닝 커서 */
 .timeline-drag-area { cursor: grab; }
 .timeline-drag-area:active { cursor: grabbing; }
+
+/* macOS Safari/Chrome 등 시스템 기본 폼 색상이 옅게 적용되는 현상 보정.
+   className으로 명시된 text-* 색은 그대로 우선 적용된다. */
+input, textarea, select {
+  color: #111827; /* gray-900 */
+}
+input::placeholder,
+textarea::placeholder {
+  color: #9ca3af; /* gray-400 */
+  opacity: 1;
+}
+@media (prefers-color-scheme: dark) {
+  input, textarea, select {
+    color: #111827; /* 강제: 다크 모드여도 입력은 가독성 유지 (배경은 흰색) */
+  }
+}
