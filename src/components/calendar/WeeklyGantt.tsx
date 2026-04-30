@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState, useMemo, useEffect, useCallback } from 'react'
-import { Project, TaskProgress, Status, Department, TeamMember } from '@/lib/types'
+import { Project, TaskProgress, Status, Department, TeamMember, Holiday } from '@/lib/types'
 import { DeptBadge } from '@/components/ui/DeptBadge'
 import { DragHint } from '@/components/ui/DragHint'
 import { getJiraUrl, buildProjectTree, STATUSES, DEPARTMENTS } from '@/lib/utils'
@@ -698,6 +698,7 @@ interface WeeklyGanttProps {
   projects: Project[]
   progressRecords: TaskProgress[]
   teamMembers?: TeamMember[]
+  holidays?: Holiday[]
   rootCount?: number
   highlightId?: string
   /** 루트 프로젝트 정렬 모드 (기본 'manual' = sort_order 순) */
@@ -720,6 +721,7 @@ export function WeeklyGantt({
   projects,
   progressRecords,
   teamMembers = [],
+  holidays = [],
   highlightId,
   sortMode = 'manual',
   onUpdateProject,
@@ -1130,6 +1132,23 @@ export function WeeklyGantt({
     return result
   }, [flatRows, addingChild])
 
+  /* ─ 공휴일 인덱스 + 이름 매핑 ─ */
+  const holidayMap = useMemo(() => {
+    const m = new Map<string, string>()
+    holidays.forEach(h => m.set(h.date, h.name))
+    return m
+  }, [holidays])
+
+  const holidayIndices = useMemo(() => {
+    const out: { idx: number; name: string }[] = []
+    yearDays.forEach((d, i) => {
+      const key = format(d, 'yyyy-MM-dd')
+      const name = holidayMap.get(key)
+      if (name) out.push({ idx: i, name })
+    })
+    return out
+  }, [yearDays, holidayMap])
+
   const dateIndexMap = useMemo(() => {
     const map = new Map<string, number>()
     yearDays.forEach((d, i) => map.set(format(d, 'yyyy-MM-dd'), i))
@@ -1519,16 +1538,23 @@ export function WeeklyGantt({
                   const isToday      = isSameDay(d, today)
                   const isMonday     = di % 5 === 0
                   const isMonthStart = di > 0 && format(d, 'M') !== format(yearDays[di - 1], 'M')
+                  const holidayName  = holidayMap.get(format(d, 'yyyy-MM-dd'))
+                  const isHoliday    = !!holidayName
                   return (
                     <div key={di}
                       className={`absolute top-0 flex flex-col items-center justify-center select-none
                         ${isMonthStart ? 'border-l-2 border-gray-400' : isMonday ? 'border-l border-gray-300' : ''}
-                        ${isToday ? 'bg-red-50' : ''}`}
-                      style={{ left: di * DAY_W, width: DAY_W, height: 34 }}>
-                      <span className={`text-xs font-medium leading-none ${isToday ? 'text-red-500' : 'text-gray-400'}`}>
+                        ${isToday ? 'bg-red-50' : isHoliday ? 'bg-red-50/60' : ''}`}
+                      style={{ left: di * DAY_W, width: DAY_W, height: 34 }}
+                      title={holidayName}>
+                      <span className={`text-xs font-medium leading-none ${
+                        isToday ? 'text-red-500' : isHoliday ? 'text-red-400' : 'text-gray-400'
+                      }`}>
                         {format(d, 'd')}
                       </span>
-                      <span className={`text-[10px] leading-none mt-0.5 ${isToday ? 'text-red-300' : 'text-gray-300'}`}>
+                      <span className={`text-[10px] leading-none mt-0.5 ${
+                        isToday ? 'text-red-300' : isHoliday ? 'text-red-300' : 'text-gray-300'
+                      }`}>
                         {format(d, 'E', { locale: ko })}
                       </span>
                     </div>
@@ -1915,6 +1941,20 @@ export function WeeklyGantt({
                           style={{ left: todayIdx * DAY_W, width: DAY_W, background: 'rgba(239,68,68,0.10)', zIndex: 1 }}
                         />
                       )}
+                      {/* 공휴일 — 컬럼 배경 + 막대 위 흰색 반투명으로 작업 색 약화 */}
+                      {holidayIndices.map(({ idx, name }) => (
+                        <div
+                          key={`hol-${idx}`}
+                          className="absolute inset-y-0 pointer-events-none"
+                          style={{
+                            left: idx * DAY_W,
+                            width: DAY_W,
+                            background: 'rgba(254,226,226,0.55)',
+                            zIndex: 3,
+                          }}
+                          title={name}
+                        />
+                      ))}
                       {/* LTS 뱃지 */}
                       {project.lts_date && (() => {
                         const ltsIdx = dateIndexMap.get(project.lts_date)

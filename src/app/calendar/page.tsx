@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Project, TaskProgress, TeamMember, DrItem, DrProgress } from '@/lib/types'
+import { Project, TaskProgress, TeamMember, DrItem, DrProgress, Holiday } from '@/lib/types'
 import { WeeklyGantt, type SortMode } from '@/components/calendar/WeeklyGantt'
 import { DRGantt, type DrSortMode } from '@/components/dr/DRGantt'
 import { ProjectForm } from '@/components/projects/ProjectForm'
@@ -34,6 +34,7 @@ export default function CalendarPage() {
 
   /* ─ 공통 상태 ────────────────────────────────────────────── */
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([])
+  const [holidays,    setHolidays]    = useState<Holiday[]>([])
   const [loading,     setLoading]     = useState(true)
   const [showForm,    setShowForm]    = useState(false)
   const [editDrItem,  setEditDrItem]  = useState<DrItem | null>(null)
@@ -64,6 +65,7 @@ export default function CalendarPage() {
       { data: drProgressData },
       { data: memberData },
       { data: commentData },
+      { data: holidayData },
     ] = await Promise.all([
       supabase.from('projects').select('*').eq('is_archived', false)
         .order('sort_order', { ascending: true })
@@ -76,12 +78,14 @@ export default function CalendarPage() {
       supabase.from('team_members').select('*').eq('is_active', true)
         .order('name', { ascending: true }),
       supabase.from('project_comments').select('project_id'),
+      supabase.from('holidays').select('*'),
     ])
     setProjects(projectData ?? [])
     setProgressRecords(progressData ?? [])
     setDrItems(drData ?? [])
     setDrProgressRecs(drProgressData ?? [])
     setTeamMembers(memberData ?? [])
+    setHolidays((holidayData ?? []) as Holiday[])
     // 코멘트 카운트 집계 (테이블 미적용 시 commentData 가 null → 빈 맵)
     const counts: Record<string, number> = {}
     for (const c of (commentData ?? []) as { project_id: string }[]) {
@@ -313,6 +317,7 @@ export default function CalendarPage() {
           projects={filteredProjects}
           progressRecords={progressRecords}
           teamMembers={teamMembers}
+          holidays={holidays}
           rootCount={filteredProjects.filter(p => !p.parent_id).length}
           highlightId={highlightId}
           sortMode={sortMode}
@@ -397,6 +402,7 @@ export default function CalendarPage() {
           items={filteredDrItems}
           progressRecords={drProgressRecs}
           teamMembers={teamMembers}
+          holidays={holidays}
           sortMode={drSortMode}
           onUpdateItem={handleUpdateDrItem}
           onUpdateProgress={handleUpdateDrProgress}

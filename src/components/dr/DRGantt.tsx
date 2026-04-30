@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useRef, useCallback, useEffect, ReactNode } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { DrItem, DrProgress, Status, Department, TeamMember } from '@/lib/types'
+import { DrItem, DrProgress, Status, Department, TeamMember, Holiday } from '@/lib/types'
 import { DR_DEPARTMENTS, getJiraUrl } from '@/lib/utils'
 import { DeptBadge } from '@/components/ui/DeptBadge'
 import { DragHint } from '@/components/ui/DragHint'
@@ -394,6 +394,7 @@ interface DRGanttProps {
   items: DrItem[]
   progressRecords: DrProgress[]
   teamMembers: TeamMember[]
+  holidays?: Holiday[]
   /** 정렬 모드 (기본 'manual' = sort_order 순) */
   sortMode?: DrSortMode
   onUpdateItem: (id: string, updates: Partial<DrItem>) => void
@@ -406,6 +407,7 @@ interface DRGanttProps {
 /* ─ 메인 컴포넌트 ───────────────────────────────────────────── */
 export function DRGantt({
   items, progressRecords, teamMembers,
+  holidays = [],
   sortMode = 'manual',
   onUpdateItem, onUpdateProgress, onAddItem, onDeleteItems,
   filterBar,
@@ -429,6 +431,23 @@ export function DRGantt({
     yearDays.forEach((d, i) => map.set(format(d, 'yyyy-MM-dd'), i))
     return map
   }, [yearDays])
+
+  /* ─ 공휴일 맵 + 표시용 인덱스 ── */
+  const holidayMap = useMemo(() => {
+    const m = new Map<string, string>()
+    holidays.forEach(h => m.set(h.date, h.name))
+    return m
+  }, [holidays])
+
+  const holidayIndices = useMemo(() => {
+    const out: { idx: number; name: string }[] = []
+    yearDays.forEach((d, i) => {
+      const key = format(d, 'yyyy-MM-dd')
+      const name = holidayMap.get(key)
+      if (name) out.push({ idx: i, name })
+    })
+    return out
+  }, [yearDays, holidayMap])
 
   /* ─ 진척 맵 ──────────────────────────────────────────────── */
   const progressMap = useMemo(() => {
@@ -873,18 +892,25 @@ export function DRGantt({
                   const isToday      = isSameDay(d, today)
                   const isMonday     = di % 5 === 0
                   const isMonthStart = di > 0 && format(d, 'M') !== format(yearDays[di - 1], 'M')
+                  const holidayName  = holidayMap.get(format(d, 'yyyy-MM-dd'))
+                  const isHoliday    = !!holidayName
                   return (
                     <div
                       key={di}
                       className={`absolute top-0 flex flex-col items-center justify-center select-none
                         ${isMonthStart ? 'border-l-2 border-gray-400' : isMonday ? 'border-l border-gray-300' : ''}
-                        ${isToday ? 'bg-red-50' : ''}`}
+                        ${isToday ? 'bg-red-50' : isHoliday ? 'bg-red-50/60' : ''}`}
                       style={{ left: di * DAY_W, width: DAY_W, height: 34 }}
+                      title={holidayName}
                     >
-                      <span className={`text-xs font-medium leading-none ${isToday ? 'text-red-500' : 'text-gray-400'}`}>
+                      <span className={`text-xs font-medium leading-none ${
+                        isToday ? 'text-red-500' : isHoliday ? 'text-red-400' : 'text-gray-400'
+                      }`}>
                         {format(d, 'd')}
                       </span>
-                      <span className={`text-[10px] leading-none mt-0.5 ${isToday ? 'text-red-300' : 'text-gray-300'}`}>
+                      <span className={`text-[10px] leading-none mt-0.5 ${
+                        isToday ? 'text-red-300' : isHoliday ? 'text-red-300' : 'text-gray-300'
+                      }`}>
                         {format(d, 'E', { locale: ko })}
                       </span>
                     </div>
@@ -1295,6 +1321,20 @@ export function DRGantt({
                         style={{ left: todayIdx * DAY_W, width: DAY_W, background: 'rgba(239,68,68,0.10)', zIndex: 1 }}
                       />
                     )}
+                    {/* 공휴일 — 컬럼 배경 + 막대 위 흰색 톤으로 작업 색 약화 */}
+                    {holidayIndices.map(({ idx, name }) => (
+                      <div
+                        key={`hol-${idx}`}
+                        className="absolute inset-y-0 pointer-events-none"
+                        style={{
+                          left: idx * DAY_W,
+                          width: DAY_W,
+                          background: 'rgba(254,226,226,0.55)',
+                          zIndex: 3,
+                        }}
+                        title={name}
+                      />
+                    ))}
                   </td>
                 </tr>
               )
