@@ -899,17 +899,17 @@ export function DRGantt({
                       key={di}
                       className={`absolute top-0 flex flex-col items-center justify-center select-none
                         ${isMonthStart ? 'border-l-2 border-gray-400' : isMonday ? 'border-l border-gray-300' : ''}
-                        ${isToday ? 'bg-red-50' : isHoliday ? 'bg-red-50/60' : ''}`}
+                        ${isToday ? 'bg-red-50' : isHoliday ? 'bg-gray-100' : ''}`}
                       style={{ left: di * DAY_W, width: DAY_W, height: 34 }}
                       title={holidayName}
                     >
                       <span className={`text-xs font-medium leading-none ${
-                        isToday ? 'text-red-500' : isHoliday ? 'text-red-400' : 'text-gray-400'
+                        isToday ? 'text-red-500' : 'text-gray-400'
                       }`}>
                         {format(d, 'd')}
                       </span>
                       <span className={`text-[10px] leading-none mt-0.5 ${
-                        isToday ? 'text-red-300' : isHoliday ? 'text-red-300' : 'text-gray-300'
+                        isToday ? 'text-red-300' : 'text-gray-300'
                       }`}>
                         {format(d, 'E', { locale: ko })}
                       </span>
@@ -1321,7 +1321,7 @@ export function DRGantt({
                         style={{ left: todayIdx * DAY_W, width: DAY_W, background: 'rgba(239,68,68,0.10)', zIndex: 1 }}
                       />
                     )}
-                    {/* 공휴일 — 컬럼 배경 + 막대 위 흰색 톤으로 작업 색 약화 */}
+                    {/* 공휴일 — 회색 톤으로 작업 색 약화 */}
                     {holidayIndices.map(({ idx, name }) => (
                       <div
                         key={`hol-${idx}`}
@@ -1329,7 +1329,7 @@ export function DRGantt({
                         style={{
                           left: idx * DAY_W,
                           width: DAY_W,
-                          background: 'rgba(254,226,226,0.55)',
+                          background: 'rgba(229,231,235,0.65)',
                           zIndex: 3,
                         }}
                         title={name}

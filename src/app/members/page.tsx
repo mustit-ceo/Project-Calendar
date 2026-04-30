@@ -962,14 +962,14 @@ export default function MembersPage() {
                       <div
                         key={p.key}
                         className={`flex-shrink-0 px-4 py-3 border-r border-gray-300 last:border-r-0 ${
-                          p.isCurrent ? 'bg-blue-50' : isHoliday ? 'bg-red-50/60' : ''
+                          p.isCurrent ? 'bg-blue-50' : isHoliday ? 'bg-gray-100' : ''
                         }`}
                         style={{ width: 250 }}
                         title={holidayName}
                       >
                         <div className="flex items-center gap-1.5">
                           <span className={`text-sm font-bold ${
-                            p.isCurrent ? 'text-blue-600' : isHoliday ? 'text-red-500' : 'text-gray-700'
+                            p.isCurrent ? 'text-blue-600' : isHoliday ? 'text-gray-500' : 'text-gray-700'
                           }`}>
                             {p.label}
                           </span>
@@ -979,13 +979,13 @@ export default function MembersPage() {
                             </span>
                           )}
                           {isHoliday && !p.isCurrent && (
-                            <span className="text-[10px] text-red-500 font-medium truncate">
+                            <span className="text-[10px] text-gray-500 font-medium truncate">
                               {holidayName}
                             </span>
                           )}
                         </div>
                         <div className={`text-xs mt-0.5 ${
-                          p.isCurrent ? 'text-blue-400' : isHoliday ? 'text-red-400' : 'text-gray-400'
+                          p.isCurrent ? 'text-blue-400' : 'text-gray-400'
                         }`}>
                           {p.sublabel}
                         </div>
@@ -1055,7 +1055,7 @@ export default function MembersPage() {
                       <div
                         key={p.key}
                         className={`flex-shrink-0 px-3 py-2.5 border-r border-gray-200 last:border-r-0 align-top ${
-                          p.isCurrent ? 'bg-blue-50/30' : isHolidayCell ? 'bg-red-50/40' : ''
+                          p.isCurrent ? 'bg-blue-50/30' : isHolidayCell ? 'bg-gray-100/70' : ''
                         }`}
                         style={{ width: 250, minHeight: 52 }}
                       >
