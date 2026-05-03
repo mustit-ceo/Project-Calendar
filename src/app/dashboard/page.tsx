@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Project, TeamMember, TaskProgress, DrItem, DrProgress } from '@/lib/types'
 import { format, addDays, getDay } from 'date-fns'
 import { ko } from 'date-fns/locale'
-import { RefreshCw, AlertTriangle, Clock, CalendarX, Pause, ChevronDown, ChevronRight as ChevronRightIcon } from 'lucide-react'
+import { RefreshCw, AlertTriangle, Clock, CalendarX, Pause, ChevronDown, ChevronRight as ChevronRightIcon, UserMinus } from 'lucide-react'
 import { DeptBadge } from '@/components/ui/DeptBadge'
 import {
   getDelayedProjects, DELAY_REASON_LABEL, DelayedProject, DelayReason,
@@ -238,6 +238,56 @@ export default function DashboardPage() {
     return parent.name
   }
 
+  /* ── 금일 작업 없는 활성 멤버 (활성 ↔ 오늘 progress 매칭) ── */
+  const noWorkTodayMembers = useMemo(() => {
+    const todayKey = format(new Date(), 'yyyy-MM-dd')
+
+    // 오늘 진행기록이 있는 leaf 프로젝트
+    const projectIdsToday = new Set(
+      progress
+        .filter(pr => pr.progress_date === todayKey)
+        .map(pr => pr.project_id)
+    )
+    const parentIds = new Set(projects.filter(p => p.parent_id).map(p => p.parent_id))
+    const todayLeaves = projects.filter(p =>
+      !parentIds.has(p.id) &&
+      projectIdsToday.has(p.id) &&
+      p.status !== '완료' && p.status !== '보류'
+    )
+
+    // 오늘 진행기록이 있는 DR
+    const drIdsToday = new Set(
+      drProgress
+        .filter(dp => dp.progress_date === todayKey)
+        .map(dp => dp.dr_id)
+    )
+    const todayDr = drItems.filter(d =>
+      d.status !== '완료' && d.status !== '보류' && drIdsToday.has(d.id)
+    )
+
+    const isAssignedSelfOrAncestor = (p: Project, member: TeamMember): boolean => {
+      let cur: Project | undefined = p
+      let depth = 0
+      while (cur && depth < 10) {
+        const ids = normalizeAssignees(cur.assignees)
+        if (ids.includes(member.id) || ids.includes(member.name)) return true
+        cur = cur.parent_id ? projectMap.get(cur.parent_id) : undefined
+        depth++
+      }
+      return false
+    }
+
+    return members.filter(m => {
+      if (!m.is_active) return false
+      const hasProj = todayLeaves.some(p => isAssignedSelfOrAncestor(p, m))
+      if (hasProj) return false
+      const hasDr = todayDr.some(d =>
+        normalizeAssignees(d.assignees).some(x => x === m.id || x === m.name)
+      )
+      return !hasDr
+    })
+  }, [projects, members, progress, drItems, drProgress, projectMap])
+
   return (
     <div className="p-6">
       {/* 헤더 */}
@@ -260,6 +310,7 @@ export default function DashboardPage() {
       {/* 지연 감지 패널 */}
       <DelayPanel
         delayed={delayed}
+        noWorkMembers={noWorkTodayMembers}
         loading={loading}
         parentPath={parentPath}
       />
@@ -474,9 +525,10 @@ function EmptyMembersBlock({ empties }: { empties: TeamMember[] }) {
 
 /* ── 지연 감지 패널 ─────────────────────────── */
 function DelayPanel({
-  delayed, loading, parentPath,
+  delayed, noWorkMembers, loading, parentPath,
 }: {
   delayed: DelayedProject[]
+  noWorkMembers: TeamMember[]
   loading: boolean
   parentPath: (p: Project) => string | null
 }) {
@@ -502,14 +554,14 @@ function DelayPanel({
             주의 필요
             {!loading && (
               <span className={`ml-1 text-xs font-bold px-2 py-0.5 rounded-full ${
-                delayed.length > 0 ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-500'
+                delayed.length + noWorkMembers.length > 0 ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-500'
               }`}>
-                {delayed.length}건
+                {delayed.length + noWorkMembers.length}건
               </span>
             )}
           </h2>
           <p className="text-xs text-gray-500 mt-0.5">
-            LTS 초과 / 시작일 초과 미착수 / 7일+ 무변동 항목
+            LTS 초과 / 시작일 초과 미착수 / 7일+ 무변동 / 금일 작업 없음
           </p>
         </div>
       </div>
@@ -519,12 +571,12 @@ function DelayPanel({
           <RefreshCw size={20} className="animate-spin mr-2" />
           불러오는 중...
         </div>
-      ) : delayed.length === 0 ? (
+      ) : delayed.length === 0 && noWorkMembers.length === 0 ? (
         <div className="text-sm text-gray-400 text-center py-8">
-          ✅ 지연 항목이 없습니다.
+          ✅ 모두 정상입니다.
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
           {cardConfig.map(cfg => {
             const items = buckets[cfg.reason]
             const Icon = cfg.icon
@@ -599,6 +651,51 @@ function DelayPanel({
               </div>
             )
           })}
+
+          {/* 4번째 카드 — 금일 작업 없음 (멤버 단위) */}
+          <div
+            className="rounded-lg border p-3"
+            style={{ backgroundColor: '#f9fafb', borderColor: '#e5e7eb' }}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <span
+                  className="inline-flex items-center justify-center w-6 h-6 rounded"
+                  style={{ backgroundColor: '#f3f4f6', color: '#374151' }}
+                >
+                  <UserMinus size={13} />
+                </span>
+                <span className="text-sm font-semibold text-gray-700">
+                  금일 작업 없음
+                </span>
+              </div>
+              <span
+                className="text-xs font-bold px-1.5 py-0.5 rounded"
+                style={{ backgroundColor: '#f3f4f6', color: '#374151' }}
+              >
+                {noWorkMembers.length}
+              </span>
+            </div>
+            {noWorkMembers.length === 0 ? (
+              <div className="text-xs text-gray-400 py-2">없음</div>
+            ) : (
+              <ul className="space-y-1.5 max-h-64 overflow-y-auto">
+                {noWorkMembers.map(m => (
+                  <li key={m.id} className="text-xs">
+                    <div className="flex items-center gap-1.5 bg-white rounded px-2 py-1.5 border border-transparent">
+                      <DeptBadge dept={m.department} />
+                      <span className="text-gray-800 font-medium">{m.name}</span>
+                      {m.is_leader && (
+                        <span className="ml-auto text-[10px] text-amber-700 bg-amber-100 border border-amber-200 px-1 py-0.5 rounded">
+                          리더
+                        </span>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
       )}
     </section>
