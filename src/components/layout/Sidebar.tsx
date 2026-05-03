@@ -226,11 +226,14 @@ export function Sidebar() {
         collapsed ? 'px-0 py-5 justify-center' : 'px-5 py-6'
       )}>
         {collapsed ? (
-          <span className="text-xl">📅</span>
+          <img src="/favicon.svg" alt="Project Calendar" className="w-7 h-7" />
         ) : (
-          <div>
-            <h1 className="text-lg font-bold text-white">📅 Project Calendar</h1>
-            <p className="text-xs text-gray-400 mt-1">mustit</p>
+          <div className="flex items-center gap-2">
+            <img src="/favicon.svg" alt="" className="w-7 h-7 flex-shrink-0" />
+            <div>
+              <h1 className="text-lg font-bold text-white leading-tight">Project Calendar</h1>
+              <p className="text-xs text-gray-400 mt-0.5">mustit</p>
+            </div>
           </div>
         )}
       </div>

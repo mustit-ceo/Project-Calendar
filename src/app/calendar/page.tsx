@@ -259,7 +259,10 @@ export default function CalendarPage() {
     <div className="p-6">
       {/* 헤더 */}
       <div className="flex items-center justify-between mb-5">
-        <h1 className="text-2xl font-bold text-gray-900">📅 캘린더</h1>
+        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+          <img src="/favicon.svg" alt="" className="w-7 h-7" />
+          캘린더
+        </h1>
         <div className="flex items-center gap-2">
           <button
             onClick={fetchAll}
