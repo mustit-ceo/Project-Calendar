@@ -340,6 +340,23 @@ function GanttDatePopup({
       }).eq('id', rootProjectId)
       if (updErr) {
         console.error('[GanttPopup] projects update error:', updErr.message, '| code:', updErr.code, '| details:', updErr.details, '| hint:', updErr.hint)
+        alert(`프로젝트 메타 저장 실패: ${updErr.message}\n(code: ${updErr.code})`)
+      }
+
+      // 진단: projects.update 후 task_progress 최종 검증 (trigger/cascade 의심)
+      const { data: finalCheck } = await supabase
+        .from('task_progress')
+        .select('progress_date')
+        .eq('project_id', projectId)
+      const finalSet = new Set((finalCheck ?? []).map(r => r.progress_date as string))
+      const finalMissing = dates.filter(d => !finalSet.has(d))
+      if (finalMissing.length > 0) {
+        console.error('[GanttPopup] post-update task_progress missing', { dates, finalSet: [...finalSet], finalMissing })
+        alert(
+          `최종 검증: ${finalMissing.length}건 누락\n` +
+          `누락 날짜: ${finalMissing.join(', ')}\n\n` +
+          `(projects.update 후 task_progress가 사라짐 — DB trigger 의심)`
+        )
       }
 
       // 5) UI 업데이트 (task_progress 저장 성공 기준으로 항상 호출)
