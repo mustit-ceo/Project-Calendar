@@ -238,7 +238,11 @@ function GanttDatePopup({
         .from('task_progress')
         .select('progress_date')
         .eq('project_id', projectId)
-      if (selErr) { console.error('[GanttPopup] task_progress select error:', selErr); return }
+      if (selErr) {
+        console.error('[GanttPopup] task_progress select error:', selErr)
+        alert(`작업일정 조회 실패: ${selErr.message}`)
+        return
+      }
 
       const existingSet = new Set((existingRows ?? []).map(r => r.progress_date as string))
       const desiredSet = new Set(dates)
@@ -250,14 +254,28 @@ function GanttDatePopup({
           .from('task_progress').delete()
           .eq('project_id', projectId)
           .in('progress_date', toDelete)
-        if (delErr) { console.error('[GanttPopup] task_progress delete error:', delErr); return }
+        if (delErr) {
+          console.error('[GanttPopup] task_progress delete error:', delErr)
+          alert(`작업일정 삭제 실패: ${delErr.message}`)
+          return
+        }
       }
 
       if (toInsert.length > 0) {
-        const { error: insErr } = await supabase.from('task_progress').insert(
+        const { data: insData, error: insErr } = await supabase.from('task_progress').insert(
           toInsert.map(d => ({ project_id: projectId, progress_date: d, label: null }))
-        )
-        if (insErr) { console.error('[GanttPopup] task_progress insert error:', insErr); return }
+        ).select()
+        if (insErr) {
+          console.error('[GanttPopup] task_progress insert error:', insErr)
+          alert(`작업일정 추가 실패: ${insErr.message}`)
+          return
+        }
+        // RLS가 silently 차단해 0행 INSERT되는 경우 감지
+        if ((insData ?? []).length !== toInsert.length) {
+          console.error('[GanttPopup] insert returned fewer rows than expected', { expected: toInsert.length, got: insData?.length, insData })
+          alert(`작업일정 저장 실패: 권한이 없습니다 (RLS). ${insData?.length ?? 0}/${toInsert.length}건만 저장됨.`)
+          return
+        }
       }
 
       // ── task_progress 저장 성공 → UI 즉시 반영 (간트 바 표시) ──
