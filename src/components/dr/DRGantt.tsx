@@ -1041,7 +1041,7 @@ export function DRGantt({
                 <tr
                   key={item.id}
                   data-id={item.id}
-                  className={`group bg-white hover:bg-[#CDFBFF] border-t border-gray-100`}
+                  className={`group bg-white hover:bg-[#E5FDFF] border-t border-gray-100`}
                   style={{ opacity: dragId === item.id ? 0.35 : 1 }}
                   draggable
                   onDragStart={e => {
