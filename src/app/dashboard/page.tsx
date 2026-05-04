@@ -279,6 +279,7 @@ export default function DashboardPage() {
 
     return members.filter(m => {
       if (!m.is_active) return false
+      if (!['PM', 'BE', 'FE'].includes(m.department ?? '')) return false
       const hasProj = todayLeaves.some(p => isAssignedSelfOrAncestor(p, m))
       if (hasProj) return false
       const hasDr = todayDr.some(d =>
