@@ -82,7 +82,7 @@ function StatusPickerPopup({
 }
 
 /* ─ 상수 ───────────────────────────────────────── */
-const DAY_W          = 32
+const DAY_W          = 30
 const BAR_H          = 20
 const ROW_PY         = 6
 const ROW_PY_CHILD   = 2
@@ -1328,7 +1328,14 @@ export function WeeklyGantt({
     updateMonthText(left)
   }, [updateMonthText])
 
-  useEffect(() => { scrollToMonth(today) }, []) // eslint-disable-line
+  // 초기 스크롤: 오늘 기준 좌측 300px 여백 (DR 탭과 통일)
+  useEffect(() => {
+    if (tableScrollRef.current && todayIdx >= 0) {
+      const targetLeft = todayIdx * DAY_W - 300
+      tableScrollRef.current.scrollLeft = Math.max(0, targetLeft)
+      updateMonthText(Math.max(0, targetLeft))
+    }
+  }, [todayIdx]) // eslint-disable-line
 
   const currentMonth = () => {
     const sl = tableScrollRef.current?.scrollLeft ?? 0

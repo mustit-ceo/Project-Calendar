@@ -19,7 +19,7 @@ import {
 /* ─ 타임라인 상수 ──────────────────────────────────────────── */
 const TIMELINE_START = new Date(2025, 11, 1)   // 2025-12-01
 const TOTAL_WEEKS    = 78
-const DAY_W          = 28
+const DAY_W          = 30
 const BAR_H          = 20
 const ROW_PY         = 6
 const DEFAULT_PROGRESS_COLOR = '#3B82F6'
