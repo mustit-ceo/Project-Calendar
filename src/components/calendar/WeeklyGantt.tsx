@@ -1685,7 +1685,7 @@ export function WeeklyGantt({
                   <tr
                     key={project.id}
                     data-id={project.id}
-                    className={`group bg-white hover:bg-sky-50 ${borderCls}`}
+                    className={`group bg-white hover:bg-[#CDFBFF] ${borderCls}`}
                     style={{ opacity: dragId === project.id ? 0.35 : 1, transition: 'opacity 0.1s' }}
                     draggable
                     onDragStart={e => {
