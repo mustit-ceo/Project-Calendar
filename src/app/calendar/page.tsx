@@ -70,11 +70,11 @@ export default function CalendarPage() {
       supabase.from('projects').select('*').eq('is_archived', false)
         .order('sort_order', { ascending: true })
         .order('created_at', { ascending: true }),
-      supabase.from('task_progress').select('*'),
+      supabase.from('task_progress').select('*').range(0, 99999),
       supabase.from('dr_items').select('*').eq('is_archived', false)
         .order('sort_order', { ascending: true })
         .order('created_at', { ascending: true }),
-      supabase.from('dr_progress').select('*'),
+      supabase.from('dr_progress').select('*').range(0, 99999),
       supabase.from('team_members').select('*').eq('is_active', true)
         .order('name', { ascending: true }),
       supabase.from('project_comments').select('project_id'),

@@ -69,7 +69,7 @@ export default function TimelinePage() {
     setLoading(true)
     const [{ data: pData }, { data: tData }] = await Promise.all([
       supabase.from('projects').select('*').eq('is_archived', false).order('sort_order'),
-      supabase.from('task_progress').select('*'),
+      supabase.from('task_progress').select('*').range(0, 99999),
     ])
     setProjects(pData ?? [])
     setProgress(tData ?? [])

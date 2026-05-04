@@ -204,7 +204,7 @@ export default function ArchivePage() {
         .select('*')
         .order('lts_date', { ascending: false, nullsFirst: false })
         .order('created_at', { ascending: false }),
-      supabase.from('task_progress').select('*'),
+      supabase.from('task_progress').select('*').range(0, 99999),
     ])
     setAllProjects(pData ?? [])
     setProgress(prData ?? [])

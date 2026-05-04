@@ -592,9 +592,9 @@ export default function MembersPage() {
       ] = await Promise.all([
         supabase.from('team_members').select('*').order('name'),
         supabase.from('projects').select('*').eq('is_archived', false),
-        supabase.from('task_progress').select('*'),
+        supabase.from('task_progress').select('*').range(0, 99999),
         supabase.from('dr_items').select('*').eq('is_archived', false),
-        supabase.from('dr_progress').select('*'),
+        supabase.from('dr_progress').select('*').range(0, 99999),
         supabase.from('holidays').select('*'),
       ])
       const err = mErr || pErr || prErr || drErr || drPrErr

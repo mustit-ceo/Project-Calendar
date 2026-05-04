@@ -105,9 +105,9 @@ export default function DashboardPage() {
     ] = await Promise.all([
       supabase.from('projects').select('*').eq('is_archived', false),
       supabase.from('team_members').select('*').eq('is_active', true),
-      supabase.from('task_progress').select('*'),
+      supabase.from('task_progress').select('*').range(0, 99999),
       supabase.from('dr_items').select('*').eq('is_archived', false),
-      supabase.from('dr_progress').select('*'),
+      supabase.from('dr_progress').select('*').range(0, 99999),
     ])
     setProjects((projData ?? []) as Project[])
     setMembers((memData ?? []) as TeamMember[])
