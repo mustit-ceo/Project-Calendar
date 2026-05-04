@@ -962,7 +962,7 @@ export default function MembersPage() {
                       <div
                         key={p.key}
                         className={`flex-shrink-0 px-4 py-3 border-r border-gray-300 last:border-r-0 ${
-                          p.isCurrent ? 'bg-blue-50' : isHoliday ? 'bg-gray-100' : ''
+                          p.isCurrent ? 'bg-blue-50' : isHoliday ? 'bg-gray-200' : ''
                         }`}
                         style={{ width: 250 }}
                         title={holidayName}
@@ -1055,7 +1055,7 @@ export default function MembersPage() {
                       <div
                         key={p.key}
                         className={`flex-shrink-0 px-3 py-2.5 border-r border-gray-200 last:border-r-0 align-top ${
-                          p.isCurrent ? 'bg-blue-50/30' : isHolidayCell ? 'bg-gray-100/70' : ''
+                          p.isCurrent ? 'bg-blue-50/30' : isHolidayCell ? 'bg-gray-200/70' : ''
                         }`}
                         style={{ width: 250, minHeight: 52 }}
                       >
