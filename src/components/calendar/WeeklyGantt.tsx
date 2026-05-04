@@ -1685,8 +1685,8 @@ export function WeeklyGantt({
                   <tr
                     key={project.id}
                     data-id={project.id}
-                    className={`group ${borderCls}`}
-                    style={{ background: '#ffffff', opacity: dragId === project.id ? 0.35 : 1, transition: 'opacity 0.1s' }}
+                    className={`group bg-white hover:bg-sky-50 ${borderCls}`}
+                    style={{ opacity: dragId === project.id ? 0.35 : 1, transition: 'opacity 0.1s' }}
                     draggable
                     onDragStart={e => {
                       // 기본 정렬에서만 순서 변경 허용 (다른 정렬 모드에선 드래그 차단)

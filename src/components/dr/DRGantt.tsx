@@ -1041,8 +1041,8 @@ export function DRGantt({
                 <tr
                   key={item.id}
                   data-id={item.id}
-                  className={`group border-t border-gray-100`}
-                  style={{ background: '#ffffff', opacity: dragId === item.id ? 0.35 : 1 }}
+                  className={`group bg-white hover:bg-sky-50 border-t border-gray-100`}
+                  style={{ opacity: dragId === item.id ? 0.35 : 1 }}
                   draggable
                   onDragStart={e => {
                     // 기본 정렬에서만 순서 변경 허용 (다른 정렬 모드에선 드래그 차단)
@@ -1335,6 +1335,14 @@ export function DRGantt({
                         title={name}
                       />
                     ))}
+                    {/* 일자 구분선 — 흰색 1px (프로젝트 탭과 통일) */}
+                    <div
+                      className="absolute inset-0 pointer-events-none"
+                      style={{
+                        backgroundImage: `repeating-linear-gradient(to right, transparent 0, transparent ${DAY_W - 1}px, #fff ${DAY_W - 1}px, #fff ${DAY_W}px)`,
+                        zIndex: 2,
+                      }}
+                    />
                   </td>
                 </tr>
               )
