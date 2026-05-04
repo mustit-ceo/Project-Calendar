@@ -211,7 +211,13 @@ function GanttDatePopup({
   const calendarDays = buildCalendarDays(viewYear, viewMonth)
   const sortedDates = Array.from(selectedDates).sort()
 
+  // 진단: popup mount 시 모드 표시 (한 번만)
+  useEffect(() => {
+    alert(`📋 Popup 진단\nprojectId: ${projectId}\nrootProjectId: ${rootProjectId}\nhasChildren: ${hasChildren}\nisRootProject (캘린더 비활성): ${isRootProject}\ninitialDates: ${initialDates.length}건`)
+  }, []) // eslint-disable-line
+
   function toggleDate(ymd: string) {
+    alert(`✅ 캘린더 클릭 잡힘: ${ymd}`)
     setSelectedDates(prev => {
       const next = new Set(prev)
       if (next.has(ymd)) next.delete(ymd); else next.add(ymd)
