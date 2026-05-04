@@ -232,7 +232,6 @@ function GanttDatePopup({
     setSaving(true)
     try {
       const dates = Array.from(selectedDates)
-      alert(`[1/4 시작] 저장 호출됨\n선택 dates: ${dates.length}건`)
 
       // 1) task_progress 저장 — 실제 변경된 날짜만 INSERT/DELETE (변경 이력 정확도 위해)
       const { data: existingRows, error: selErr } = await supabase
@@ -249,7 +248,6 @@ function GanttDatePopup({
       const desiredSet = new Set(dates)
       const toDelete = [...existingSet].filter(d => !desiredSet.has(d))
       const toInsert = [...desiredSet].filter(d => !existingSet.has(d))
-      alert(`[2/4 진행] 기존 DB ${existingSet.size}건\n→ 추가 ${toInsert.length}건 / 삭제 ${toDelete.length}건`)
 
       if (toDelete.length > 0) {
         const { error: delErr } = await supabase
@@ -280,28 +278,6 @@ function GanttDatePopup({
         }
       }
 
-      alert(`[3/4 INSERT/DELETE 완료] DB 응답 OK`)
-      // 진단: INSERT/DELETE 직후 DB 상태 재조회 → 의도한 dates와 일치하는지 검증
-      const { data: verifyData, error: verifyErr } = await supabase
-        .from('task_progress')
-        .select('progress_date')
-        .eq('project_id', projectId)
-      if (verifyErr) {
-        console.error('[GanttPopup] verify select error:', verifyErr)
-      } else {
-        const verifySet = new Set((verifyData ?? []).map(r => r.progress_date as string))
-        const missing  = dates.filter(d => !verifySet.has(d))
-        const extras   = [...verifySet].filter(d => !desiredSet.has(d))
-        if (missing.length > 0 || extras.length > 0) {
-          console.error('[GanttPopup] save verify mismatch', { dates, verifySet: [...verifySet], missing, extras })
-          alert(
-            `저장 검증 실패\n` +
-            (missing.length > 0 ? `· 누락: ${missing.join(', ')}\n` : '') +
-            (extras.length  > 0 ? `· 잔류: ${extras.join(', ')}\n`  : '') +
-            `(INSERT/DELETE 응답은 OK였지만 DB 재조회 결과가 다름 — RLS SELECT 정책 또는 trigger 의심)`
-          )
-        }
-      }
 
       // ── task_progress 저장 성공 → UI 즉시 반영 (간트 바 표시) ──
       const ltsVal = lts.trim() || null
@@ -346,23 +322,6 @@ function GanttDatePopup({
         alert(`프로젝트 메타 저장 실패: ${updErr.message}\n(code: ${updErr.code})`)
       }
 
-      // 진단: projects.update 후 task_progress 최종 검증 (trigger/cascade 의심)
-      const { data: finalCheck } = await supabase
-        .from('task_progress')
-        .select('progress_date')
-        .eq('project_id', projectId)
-      const finalSet = new Set((finalCheck ?? []).map(r => r.progress_date as string))
-      const finalMissing = dates.filter(d => !finalSet.has(d))
-      if (finalMissing.length > 0) {
-        console.error('[GanttPopup] post-update task_progress missing', { dates, finalSet: [...finalSet], finalMissing })
-        alert(
-          `최종 검증: ${finalMissing.length}건 누락\n` +
-          `누락 날짜: ${finalMissing.join(', ')}\n\n` +
-          `(projects.update 후 task_progress가 사라짐 — DB trigger 의심)`
-        )
-      }
-
-      alert(`[4/4 완료] 최종 DB 검증 ${finalSet.size}건 / 의도한 ${dates.length}건\n→ 옵티미스틱 onSaved 호출 직전`)
       // 5) UI 업데이트 (task_progress 저장 성공 기준으로 항상 호출)
       onSaved(dates, { lts_date: ltsVal, start_date: minDate, end_date: maxDate })
     } finally {
@@ -384,9 +343,15 @@ function GanttDatePopup({
         </div>
 
         <div className="p-4">
-          {/* ── 루트 프로젝트: 캘린더 없이 시작일 + LTS만 표시 ── */}
+          {/* ── 루트 프로젝트: 캘린더 없이 시작일 + LTS + 안내 ── */}
           {isRootProject ? (
             <>
+              {/* 안내 메시지 */}
+              <div className="mb-3 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-[11px] text-amber-800 leading-relaxed">
+                💡 이 프로젝트는 하위 Task가 있어 일정이 자동 합산됩니다.<br/>
+                <span className="text-amber-700">개별 일정은 하위 Task / Sub-task 행을 클릭해서 추가하세요.</span>
+              </div>
+
               {/* 시작일 (읽기 전용) */}
               <div className="flex items-center gap-2 mb-3">
                 <span className="text-[11px] font-semibold text-gray-500 w-20 flex-shrink-0">시작일자</span>
