@@ -232,6 +232,7 @@ function GanttDatePopup({
     setSaving(true)
     try {
       const dates = Array.from(selectedDates)
+      alert(`[1/4 시작] 저장 호출됨\n선택 dates: ${dates.length}건`)
 
       // 1) task_progress 저장 — 실제 변경된 날짜만 INSERT/DELETE (변경 이력 정확도 위해)
       const { data: existingRows, error: selErr } = await supabase
@@ -248,6 +249,7 @@ function GanttDatePopup({
       const desiredSet = new Set(dates)
       const toDelete = [...existingSet].filter(d => !desiredSet.has(d))
       const toInsert = [...desiredSet].filter(d => !existingSet.has(d))
+      alert(`[2/4 진행] 기존 DB ${existingSet.size}건\n→ 추가 ${toInsert.length}건 / 삭제 ${toDelete.length}건`)
 
       if (toDelete.length > 0) {
         const { error: delErr } = await supabase
@@ -278,6 +280,7 @@ function GanttDatePopup({
         }
       }
 
+      alert(`[3/4 INSERT/DELETE 완료] DB 응답 OK`)
       // 진단: INSERT/DELETE 직후 DB 상태 재조회 → 의도한 dates와 일치하는지 검증
       const { data: verifyData, error: verifyErr } = await supabase
         .from('task_progress')
@@ -359,6 +362,7 @@ function GanttDatePopup({
         )
       }
 
+      alert(`[4/4 완료] 최종 DB 검증 ${finalSet.size}건 / 의도한 ${dates.length}건\n→ 옵티미스틱 onSaved 호출 직전`)
       // 5) UI 업데이트 (task_progress 저장 성공 기준으로 항상 호출)
       onSaved(dates, { lts_date: ltsVal, start_date: minDate, end_date: maxDate })
     } finally {
