@@ -278,6 +278,28 @@ function GanttDatePopup({
         }
       }
 
+      // 진단: INSERT/DELETE 직후 DB 상태 재조회 → 의도한 dates와 일치하는지 검증
+      const { data: verifyData, error: verifyErr } = await supabase
+        .from('task_progress')
+        .select('progress_date')
+        .eq('project_id', projectId)
+      if (verifyErr) {
+        console.error('[GanttPopup] verify select error:', verifyErr)
+      } else {
+        const verifySet = new Set((verifyData ?? []).map(r => r.progress_date as string))
+        const missing  = dates.filter(d => !verifySet.has(d))
+        const extras   = [...verifySet].filter(d => !desiredSet.has(d))
+        if (missing.length > 0 || extras.length > 0) {
+          console.error('[GanttPopup] save verify mismatch', { dates, verifySet: [...verifySet], missing, extras })
+          alert(
+            `저장 검증 실패\n` +
+            (missing.length > 0 ? `· 누락: ${missing.join(', ')}\n` : '') +
+            (extras.length  > 0 ? `· 잔류: ${extras.join(', ')}\n`  : '') +
+            `(INSERT/DELETE 응답은 OK였지만 DB 재조회 결과가 다름 — RLS SELECT 정책 또는 trigger 의심)`
+          )
+        }
+      }
+
       // ── task_progress 저장 성공 → UI 즉시 반영 (간트 바 표시) ──
       const ltsVal = lts.trim() || null
 
